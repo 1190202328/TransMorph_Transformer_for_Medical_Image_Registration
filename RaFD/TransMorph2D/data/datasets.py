@@ -3,8 +3,37 @@ import torch, sys
 from torch.utils.data import Dataset
 from .data_utils import pkload
 import matplotlib.pyplot as plt
-
+from PIL import Image
 import numpy as np
+
+
+class FIREDataset(Dataset):
+    def __init__(self, data_dir, transforms):
+        self.data_dir = data_dir
+        self.transforms = transforms
+        self.init()
+
+    def init(self):
+        full_path_pair = []
+        for path in os.listdir(self.data_dir):
+            prefix = path.split('_')[0]
+            full_path_pair.append([f'{self.data_dir}/{prefix}_1.jpg', f'{self.data_dir}/{prefix}_2.jpg'])
+        self.paths = full_path_pair
+
+    def __getitem__(self, index):
+        path1, path2 = self.paths[index]
+        x = Image.open(path1).convert('RGB')
+        y = Image.open(path2).convert('RGB')
+        x_grey = Image.open(path1).convert('1')
+        y_grey = Image.open(path2).convert('1')
+        x = self.transforms(x)
+        y = self.transforms(y)
+        x_grey = self.transforms(x_grey)
+        y_grey = self.transforms(y_grey)
+        return x, y, x_grey, y_grey
+
+    def __len__(self):
+        return len(self.paths)
 
 
 class RaFDDataset(Dataset):
