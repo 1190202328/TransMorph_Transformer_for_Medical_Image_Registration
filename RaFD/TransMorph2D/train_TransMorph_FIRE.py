@@ -37,7 +37,7 @@ def main():
     batch_size = 28
     train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
     val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
-    weights = [1, 1]  # loss weights
+    weights = [1, 10]  # loss weights
     save_dir = 'TransMorph_ssim_{}_diffusion_{}/'.format(weights[0], weights[1])
     if not os.path.exists('experiments/' + save_dir):
         os.makedirs('experiments/' + save_dir)
