@@ -1,5 +1,6 @@
 import glob
 import os
+import random
 import sys
 
 import matplotlib.pyplot as plt
@@ -33,20 +34,19 @@ class Logger(object):
 
 
 def main():
-    batch_size = 24
+    batch_size = 28
     train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
-    val_dir = 'pass'
-    weights = [1, 1]  # loss weights
+    val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
+    weights = [1, 1000]  # loss weights
     save_dir = 'TransMorph_ssim_{}_diffusion_{}/'.format(weights[0], weights[1])
     if not os.path.exists('experiments/' + save_dir):
         os.makedirs('experiments/' + save_dir)
     if not os.path.exists('logs/' + save_dir):
         os.makedirs('logs/' + save_dir)
     sys.stdout = Logger('logs/' + save_dir)
-    lr = 0.0001  # learning rate
+    lr = 0.001  # learning rate
     epoch_start = 0
     max_epoch = 400  # max traning epoch
-    cont_training = False  # if continue training
 
     '''
     Initialize model
@@ -66,27 +66,20 @@ def main():
     '''
     If continue from previous training
     '''
-    if cont_training:
-        epoch_start = 201
-        model_dir = 'experiments/' + save_dir
-        updated_lr = round(lr * np.power(1 - (epoch_start) / max_epoch, 0.9), 8)
-        best_model = torch.load(model_dir + natsorted(os.listdir(model_dir))[-1])['state_dict']
-        print('Model: {} loaded!'.format(natsorted(os.listdir(model_dir))[-1]))
-        model.load_state_dict(best_model)
-    else:
-        updated_lr = lr
+
+    updated_lr = lr
 
     '''
     Initialize training
     '''
-    train_composed = transforms.Compose([
+    train_composed = val_composed = transforms.Compose([
         transforms.Resize(config.img_size[0]),
         transforms.ToTensor()
     ])
     train_set = datasets.FIREDataset(train_dir, transforms=train_composed)
-    # val_set = datasets.RaFDInferDataset(glob.glob(val_dir + '*.pkl'), transforms=None)
+    val_set = datasets.FIREDataset(val_dir, transforms=val_composed)
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
-    # val_loader = DataLoader(val_set, batch_size=50, shuffle=False, num_workers=2, pin_memory=True)
+    val_loader = DataLoader(val_set, batch_size=16, shuffle=True, num_workers=2, pin_memory=True)
 
     optimizer = optim.Adam(model.parameters(), lr=updated_lr, weight_decay=0, amsgrad=True)
     criterion = losses.SSIM_loss(False)
@@ -148,14 +141,17 @@ def main():
                                                                                    loss_vals[0].item() / 2,
                                                                                    loss_vals[1].item() / 2))
         print('Epoch {} loss {:.4f}'.format(epoch, loss_all.avg))
+
+        if epoch % 10 != 0:
+            continue
         '''
         Validation
         '''
         eval_ncc = utils.AverageMeter()
         with torch.no_grad():
             i = 1
-            for data in train_loader:
-                print(f'{i}/{len(train_loader)}')
+            for data in val_loader:
+                print(f'evaluating {i}/{len(val_loader)}')
                 i += 1
                 model.eval()
                 data = [t.cuda() for t in data]
@@ -175,7 +171,7 @@ def main():
                 ncc = ssim(output[0], y)
                 eval_ncc.update(ncc.item(), y.numel())
 
-                grid_img = mk_grid_img(8, 1, (x.shape[0], config.img_size[0], config.img_size[1]))
+                grid_img = mk_grid_img(16, 2, (x.shape[0], config.img_size[0], config.img_size[1]))
                 def_out = []
                 channel_dim = 1
                 for idx in range(3):
@@ -183,8 +179,7 @@ def main():
                     def_out.append(x_def)
                 def_out = torch.cat(def_out, dim=channel_dim)
                 def_grid = reg_model_bilin([grid_img.float(), output[1].cuda()])
-                # only check 1st batch
-                break
+
         best_ncc = max(eval_ncc.avg, best_ncc)
         save_checkpoint({
             'epoch': epoch + 1,
@@ -195,11 +190,14 @@ def main():
         writer.add_scalar('DSC/validate', eval_ncc.avg, epoch)
         plt.switch_backend('agg')
         pred_fig = comput_fig(def_out)
+        grid_origin_fig = comput_fig(grid_img)
         grid_fig = comput_fig(def_grid)
         x_fig = comput_fig(x_rgb)
         tar_fig = comput_fig(y_rgb)
         writer.add_figure('Grid', grid_fig, epoch)
         plt.close(grid_fig)
+        writer.add_figure('Grid_origin', grid_origin_fig, 0)
+        plt.close(grid_origin_fig)
         writer.add_figure('input', x_fig, epoch)
         plt.close(x_fig)
         writer.add_figure('ground truth', tar_fig, epoch)
@@ -218,8 +216,6 @@ def comput_fig(img):
         plt.axis('off')
         img_local = img[i]
 
-        if type(img_local) != np.ndarray:
-            img_local = img_local.numpy()
         img_local = np.transpose(img_local, (1, 2, 0))
         if img_local.shape[-1] == 1:
             # gray
@@ -238,9 +234,9 @@ def adjust_learning_rate(optimizer, epoch, MAX_EPOCHES, INIT_LR, power=0.9):
 def mk_grid_img(grid_step, line_thickness=1, grid_sz=(64, 256, 256)):
     grid_img = np.zeros(grid_sz)
     for j in range(0, grid_img.shape[1], grid_step):
-        grid_img[:, j + line_thickness - 1, :] = 1
+        grid_img[:, j:j + line_thickness, :] = 1
     for i in range(0, grid_img.shape[2], grid_step):
-        grid_img[:, :, i + line_thickness - 1] = 1
+        grid_img[:, :, i:i + line_thickness] = 1
     grid_img = grid_img[:, None, ...]
     grid_img = torch.from_numpy(grid_img).cuda()
     return grid_img
@@ -254,7 +250,23 @@ def save_checkpoint(state, save_dir='models', filename='checkpoint.pth.tar', max
         model_lists = natsorted(glob.glob(save_dir + '*'))
 
 
+def set_random_seed(seed, deterministic=True):
+    """Set random seed."""
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+    torch.set_rng_state(torch.manual_seed(seed).get_state())
+    if deterministic:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
+
 if __name__ == '__main__':
+    # set randomseed
+    set_random_seed(12345)
+
     '''
     GPU configuration
     '''

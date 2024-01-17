@@ -1,10 +1,11 @@
-import os, glob
-import torch, sys
-from torch.utils.data import Dataset
-from .data_utils import pkload
-import matplotlib.pyplot as plt
-from PIL import Image
+import os
+
 import numpy as np
+import torch
+from PIL import Image
+from torch.utils.data import Dataset
+
+from .data_utils import pkload
 
 
 class FIREDataset(Dataset):
@@ -15,17 +16,23 @@ class FIREDataset(Dataset):
 
     def init(self):
         full_path_pair = []
+        added_names = set()
         for path in os.listdir(self.data_dir):
             prefix = path.split('_')[0]
+            if prefix in added_names:
+                continue
+            added_names.add(prefix)
             full_path_pair.append([f'{self.data_dir}/{prefix}_1.jpg', f'{self.data_dir}/{prefix}_2.jpg'])
         self.paths = full_path_pair
 
     def __getitem__(self, index):
         path1, path2 = self.paths[index]
-        x = Image.open(path1).convert('RGB')
-        y = Image.open(path2).convert('RGB')
-        x_grey = Image.open(path1).convert('1')
-        y_grey = Image.open(path2).convert('1')
+        image_1 = Image.open(path1)
+        image_2 = Image.open(path2)
+        x = image_1.convert('RGB')
+        y = image_2.convert('RGB')
+        x_grey = image_1.convert('1')
+        y_grey = image_2.convert('1')
         x = self.transforms(x)
         y = self.transforms(y)
         x_grey = self.transforms(x_grey)
@@ -46,9 +53,9 @@ class RaFDDataset(Dataset):
         x, y, x_gray, y_gray = pkload(path)
         x_gray, y_gray = x_gray[None, ...], y_gray[None, ...]
         x_gray, y_gray = self.transforms([x_gray, y_gray])
-        #plt.figure()
-        #plt.imshow(x_gray[0], cmap='gray')
-        #plt.show()
+        # plt.figure()
+        # plt.imshow(x_gray[0], cmap='gray')
+        # plt.show()
         x = np.ascontiguousarray(x_gray)
         y = np.ascontiguousarray(y_gray)
         x, y = torch.from_numpy(x), torch.from_numpy(y)
@@ -66,7 +73,7 @@ class RaFDInferDataset(Dataset):
     def one_hot(self, img, C):
         out = np.zeros((C, img.shape[1], img.shape[2], img.shape[3]))
         for i in range(C):
-            out[i,...] = img == i
+            out[i, ...] = img == i
         return out
 
     def __getitem__(self, index):
