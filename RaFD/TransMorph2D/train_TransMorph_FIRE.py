@@ -37,7 +37,7 @@ def main():
     batch_size = 28
     train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
     val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
-    weights = [1, 1000]  # loss weights
+    weights = [1, 1]  # loss weights
     save_dir = 'TransMorph_ssim_{}_diffusion_{}/'.format(weights[0], weights[1])
     if not os.path.exists('experiments/' + save_dir):
         os.makedirs('experiments/' + save_dir)
@@ -79,13 +79,14 @@ def main():
     train_set = datasets.FIREDataset(train_dir, transforms=train_composed)
     val_set = datasets.FIREDataset(val_dir, transforms=val_composed)
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
-    val_loader = DataLoader(val_set, batch_size=16, shuffle=True, num_workers=2, pin_memory=True)
+    val_loader = DataLoader(val_set, batch_size=16, shuffle=True, num_workers=2, pin_memory=True, drop_last=True)
 
     optimizer = optim.Adam(model.parameters(), lr=updated_lr, weight_decay=0, amsgrad=True)
-    criterion = losses.SSIM_loss(False)
     ssim = SSIM(data_range=255, size_average=True, channel=1)
-    criterions = [criterion]
-    criterions += [losses.Grad('l2')]
+
+    # losses.SSIM_loss(False)
+    criterions = [losses.NCC_vxm(), losses.Grad('l2')]
+
     best_ncc = 0
     writer = SummaryWriter(log_dir='logs/' + save_dir)
     for epoch in range(epoch_start, max_epoch):
@@ -179,7 +180,7 @@ def main():
                     def_out.append(x_def)
                 def_out = torch.cat(def_out, dim=channel_dim)
                 def_grid = reg_model_bilin([grid_img.float(), output[1].cuda()])
-
+        print(eval_ncc.avg)
         best_ncc = max(eval_ncc.avg, best_ncc)
         save_checkpoint({
             'epoch': epoch + 1,

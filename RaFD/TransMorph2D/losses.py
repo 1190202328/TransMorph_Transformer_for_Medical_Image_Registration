@@ -37,6 +37,14 @@ class SSIM_loss(torch.nn.Module):
     def forward(self, img1, img2):
         return -self.SSIM(img1, img2)
 
+class MSE_loss_2D(torch.nn.Module):
+    def __init__(self):
+        super(MSE_loss_2D, self).__init__()
+        self.loss = torch.nn.MSELoss()
+    def forward(self, img1, img2):
+        return -self.loss(img1, img2)
+
+
 def gaussian(window_size, sigma):
     gauss = torch.Tensor([exp(-(x - window_size // 2) ** 2 / float(2 * sigma ** 2)) for x in range(window_size)])
     return gauss / gauss.sum()
