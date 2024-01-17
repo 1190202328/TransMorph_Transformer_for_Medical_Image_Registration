@@ -28,12 +28,12 @@ class NLLLoss(nn.Module):
             return loss
 
 class SSIM_loss(torch.nn.Module):
-    def __init__(self, if_MS=True, win_size=11):
+    def __init__(self, data_range=255, if_MS=True, win_size=11):
         super(SSIM_loss, self).__init__()
         if if_MS:
-            self.SSIM = MS_SSIM(win_size=win_size, data_range=255, size_average=True, channel=1)
+            self.SSIM = MS_SSIM(win_size=win_size, data_range=data_range, size_average=True, channel=1)
         else:
-            self.SSIM = SSIM(data_range=255, size_average=True, channel=1)
+            self.SSIM = SSIM(data_range=data_range, size_average=True, channel=1)
     def forward(self, img1, img2):
         return -self.SSIM(img1, img2)
 

@@ -82,10 +82,10 @@ def main():
     val_loader = DataLoader(val_set, batch_size=16, shuffle=True, num_workers=2, pin_memory=True, drop_last=True)
 
     optimizer = optim.Adam(model.parameters(), lr=updated_lr, weight_decay=0, amsgrad=True)
-    ssim = SSIM(data_range=255, size_average=True, channel=1)
+    ssim = SSIM(data_range=1, size_average=True, channel=1)
 
     # losses.SSIM_loss(False)
-    criterions = [losses.NCC_vxm(), losses.Grad('l2')]
+    criterions = [losses.SSIM_loss(data_range=1, if_MS=False), losses.Grad('l2')]
 
     best_ncc = 0
     writer = SummaryWriter(log_dir='logs/' + save_dir)
@@ -180,7 +180,7 @@ def main():
                     def_out.append(x_def)
                 def_out = torch.cat(def_out, dim=channel_dim)
                 def_grid = reg_model_bilin([grid_img.float(), output[1].cuda()])
-        print(eval_ncc.avg)
+        print(f'result = {eval_ncc.avg}')
         best_ncc = max(eval_ncc.avg, best_ncc)
         save_checkpoint({
             'epoch': epoch + 1,
