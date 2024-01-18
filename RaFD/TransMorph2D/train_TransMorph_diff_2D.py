@@ -33,12 +33,22 @@ class Logger(object):
 
 
 def main():
-    batch_size = 128
+    batch_size = 196
     # train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
     # val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
     train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/training'
     val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/testing'
-    weights = [1, 5]  # loss weights
+
+    # need change
+    weights = [1, 1]  # loss weights
+
+    recon_loss_fuc = None
+    # recon_loss_fuc = losses.SSIM_loss(data_range=255, if_MS=False)
+    # recon_loss_fuc = losses.NCC_vxm()
+    # recon_loss_fuc = losses.MSE_loss_2D()
+
+    # change done
+
     save_dir = 'TransMorphDiff_ssim_{}_diffusion_{}/'.format(weights[0], weights[1])
     if not os.path.exists('experiments/' + save_dir):
         os.makedirs('experiments/' + save_dir)
@@ -53,7 +63,7 @@ def main():
     Initialize model
     '''
     config = CONFIGS_TM['TransMorphDiff']
-    model = TransMorphDiff(config)
+    model = TransMorphDiff(config, recon_loss_fuc=recon_loss_fuc)
     model.cuda()
 
     '''
@@ -113,9 +123,9 @@ def main():
             y = data[-1]
 
             output = model((x, y))
-            loss_sim = model.get_sim_loss()
+            loss_sim = model.get_sim_loss() * weights[0]
             loss_sim_iter += loss_sim
-            loss_reg = model.scale_reg_loss()
+            loss_reg = model.scale_reg_loss() * weights[1]
             loss_reg_iter += loss_reg
             loss = loss_sim + loss_reg
 
@@ -129,12 +139,13 @@ def main():
                 with torch.no_grad():
                     print(f'origin x & y = {ssim(x, y)}')
                     print(f'warped x & x = {ssim(output[0], x)}')
+                    print(f'warped x & y = {ssim(output[0], y)}')
 
             del output
             output = model((y, x))
-            loss_sim = model.get_sim_loss()
+            loss_sim = model.get_sim_loss() * weights[0]
             loss_sim_iter += loss_sim
-            loss_reg = model.scale_reg_loss()
+            loss_reg = model.scale_reg_loss() * weights[1]
             loss_reg_iter += loss_reg
             loss = loss_sim + loss_reg
             # compute gradient and do SGD step
@@ -183,8 +194,8 @@ def main():
                 x_def = reg_model(x_rgb[:, idx:idx + 1, ...].cuda().float(), flow)
                 def_out.append(x_def)
             def_out = torch.cat(def_out, dim=channel_dim)
-            def_grid = reg_model_bilin([grid_img.float(), flow])
-            print(flow[1][0][:, 50:55, 50:55])
+            def_grid = reg_model_bilin(grid_img.float(), flow)
+            print(flow[0][:, 50:55, 50:55])
         print(f'result = {eval_ncc.avg}')
         best_ncc = max(eval_ncc.avg, best_ncc)
         save_checkpoint({

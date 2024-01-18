@@ -323,7 +323,7 @@ class TransMorphDiff(nn.Module):
     Probabilistic TransMorph Model
     :return: Warped image, Deformation field, Displacement field
     """
-    def __init__(self, config):
+    def __init__(self, config, recon_loss_fuc=None):
         super(TransMorphDiff, self).__init__()
         img_sz = config.img_size
         image_sigma = config.image_sigma
@@ -342,6 +342,7 @@ class TransMorphDiff(nn.Module):
         self.D = self._degree_matrix(self.flow_vol_shape)
         self.D = (self.D).cuda()
         self.loss_fn =  None
+        self.recon_loss_fuc = recon_loss_fuc
 
         self.id_transform = gen_identity_map(self.img_sz, 1.0).cuda()
         self.id_transform  =self.id_transform.view([1]+list(self.id_transform.shape))
@@ -575,7 +576,11 @@ class TransMorphDiff(nn.Module):
         """ reconstruction loss """
         y_pred = self.warped
         y_true = self.target
-        return 1. / (self.image_sigma ** 2) * torch.mean((y_true - y_pred)**2)  ##!!!!!!!!
+
+        if self.recon_loss_fuc is None:
+            return 1. / (self.image_sigma ** 2) * torch.mean((y_true - y_pred)**2)  ##!!!!!!!!
+        else:
+            return self.recon_loss_fuc(y_pred, y_true)
 
     def get_loss(self):
         sim_loss = self.get_sim_loss()
