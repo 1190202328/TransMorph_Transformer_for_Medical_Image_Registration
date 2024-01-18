@@ -34,9 +34,11 @@ class Logger(object):
 
 
 def main():
-    batch_size = 28
-    train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
-    val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
+    batch_size = 96
+    # train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
+    # val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
+    train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/training'
+    val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/testing'
     weights = [1, 1]  # loss weights
     save_dir = 'TransMorph_ssim_{}_diffusion_{}/'.format(weights[0], weights[1])
     if not os.path.exists('experiments/' + save_dir):
@@ -76,8 +78,11 @@ def main():
         transforms.Resize(config.img_size[0]),
         transforms.ToTensor()
     ])
-    train_set = datasets.FIREDataset(train_dir, transforms=train_composed)
-    val_set = datasets.FIREDataset(val_dir, transforms=val_composed)
+    # train_set = datasets.FIREDataset(train_dir, transforms=train_composed)
+    # val_set = datasets.FIREDataset(val_dir, transforms=val_composed)
+    train_set = datasets.UDISDataset(train_dir, transforms=train_composed)
+    val_set = datasets.UDISDataset(val_dir, transforms=val_composed)
+
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
     val_loader = DataLoader(val_set, batch_size=16, shuffle=True, num_workers=2, pin_memory=True, drop_last=True)
 
@@ -89,6 +94,7 @@ def main():
 
     best_ncc = 0
     writer = SummaryWriter(log_dir='logs/' + save_dir)
+    info_gap = 10
     for epoch in range(epoch_start, max_epoch):
         print('Training Starts')
         '''
@@ -103,9 +109,6 @@ def main():
             data = [t.cuda() for t in data]
             x = data[-2]
             y = data[-1]
-
-            with torch.no_grad():
-                print(f'origin x & y = {criterions[0](x, y)}')
 
             x_in = torch.cat((x, y), dim=1)
             output = model(x_in)
@@ -126,9 +129,10 @@ def main():
                 loss += curr_loss
             loss_all.update(loss.item(), y.numel())
 
-            with torch.no_grad():
-                print(f'warped x & x = {criterions[0](output[0], x)}')
-                print(output[1][0][:, 50:55, 50:55])
+            if idx % info_gap == 0:
+                with torch.no_grad():
+                    print(f'origin x & y = {criterions[0](x, y)}')
+                    print(f'warped x & x = {criterions[0](output[0], x)}')
 
             # compute gradient and do SGD step
             optimizer.zero_grad()
@@ -153,9 +157,11 @@ def main():
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-            print('Iter {} of {} loss {:.4f}, Img Sim: {:.6f}, Reg: {:.6f}'.format(idx, len(train_loader), loss.item(),
-                                                                                   loss_vals[0].item() / 2,
-                                                                                   loss_vals[1].item() / 2))
+            if idx % info_gap == 0:
+                print('Iter {} of {} loss {:.4f}, Img Sim: {:.6f}, Reg: {:.6f}'.format(idx, len(train_loader),
+                                                                                       loss.item(),
+                                                                                       loss_vals[0].item() / 2,
+                                                                                       loss_vals[1].item() / 2))
         print('Epoch {} loss {:.4f}'.format(epoch, loss_all.avg))
 
         if epoch % 10 != 0:
@@ -186,15 +192,15 @@ def main():
                 output = model(x_in)
                 ncc = ssim(output[0], y)
                 eval_ncc.update(ncc.item(), y.numel())
-
-                grid_img = mk_grid_img(8, 1, (x.shape[0], config.img_size[0], config.img_size[1]))
-                def_out = []
-                channel_dim = 1
-                for idx in range(3):
-                    x_def = reg_model_bilin([x_rgb[:, idx:idx + 1, ...].cuda().float(), output[1].cuda()])
-                    def_out.append(x_def)
-                def_out = torch.cat(def_out, dim=channel_dim)
-                def_grid = reg_model_bilin([grid_img.float(), output[1].cuda()])
+            grid_img = mk_grid_img(8, 1, (x.shape[0], config.img_size[0], config.img_size[1]))
+            def_out = []
+            channel_dim = 1
+            for idx in range(3):
+                x_def = reg_model_bilin([x_rgb[:, idx:idx + 1, ...].cuda().float(), output[1].cuda()])
+                def_out.append(x_def)
+            def_out = torch.cat(def_out, dim=channel_dim)
+            def_grid = reg_model_bilin([grid_img.float(), output[1].cuda()])
+            print(output[1][0][:, 50:55, 50:55])
         print(f'result = {eval_ncc.avg}')
         best_ncc = max(eval_ncc.avg, best_ncc)
         save_checkpoint({

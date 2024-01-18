@@ -8,6 +8,36 @@ from torch.utils.data import Dataset
 from .data_utils import pkload
 
 
+class UDISDataset(Dataset):
+    def __init__(self, data_dir, transforms):
+        self.data_dir = data_dir
+        self.transforms = transforms
+        self.init()
+
+    def init(self):
+        full_path_pair = []
+        for name in os.listdir(f'{self.data_dir}/input1'):
+            full_path_pair.append([f'{self.data_dir}/input1/{name}', f'{self.data_dir}/input2/{name}'])
+        self.paths = full_path_pair
+
+    def __getitem__(self, index):
+        path1, path2 = self.paths[index]
+        image_1 = Image.open(path1)
+        image_2 = Image.open(path2)
+        x = image_1.convert('RGB')
+        y = image_2.convert('RGB')
+        x_grey = image_1.convert('1')
+        y_grey = image_2.convert('1')
+        x = self.transforms(x)
+        y = self.transforms(y)
+        x_grey = self.transforms(x_grey)
+        y_grey = self.transforms(y_grey)
+        return x * 255, y * 255, x_grey * 255, y_grey * 255
+
+    def __len__(self):
+        return len(self.paths)
+
+
 class FIREDataset(Dataset):
     def __init__(self, data_dir, transforms):
         self.data_dir = data_dir
@@ -37,7 +67,7 @@ class FIREDataset(Dataset):
         y = self.transforms(y)
         x_grey = self.transforms(x_grey)
         y_grey = self.transforms(y_grey)
-        return x*255, y*255, x_grey*255, y_grey*255
+        return x * 255, y * 255, x_grey * 255, y_grey * 255
 
     def __len__(self):
         return len(self.paths)
