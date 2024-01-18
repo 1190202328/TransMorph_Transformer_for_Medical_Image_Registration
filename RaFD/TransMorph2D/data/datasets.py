@@ -37,7 +37,7 @@ class FIREDataset(Dataset):
         y = self.transforms(y)
         x_grey = self.transforms(x_grey)
         y_grey = self.transforms(y_grey)
-        return x, y, x_grey, y_grey
+        return x*255, y*255, x_grey*255, y_grey*255
 
     def __len__(self):
         return len(self.paths)

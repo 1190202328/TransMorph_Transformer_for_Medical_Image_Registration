@@ -82,9 +82,9 @@ def main():
     val_loader = DataLoader(val_set, batch_size=16, shuffle=True, num_workers=2, pin_memory=True, drop_last=True)
 
     optimizer = optim.Adam(model.parameters(), lr=updated_lr, weight_decay=0, amsgrad=True)
-    ssim = SSIM(data_range=1, size_average=True, channel=1)
+    ssim = SSIM(data_range=255, size_average=True, channel=1)
 
-    criterions = [losses.SSIM_loss(data_range=1, if_MS=False), losses.Grad('l2')]
+    criterions = [losses.SSIM_loss(data_range=255, if_MS=False), losses.Grad('l2')]
     # criterions = [losses.MSE_loss_2D(), losses.Grad('l2')]
 
     best_ncc = 0
@@ -105,7 +105,7 @@ def main():
             y = data[-1]
 
             with torch.no_grad():
-                print(f'origin = {criterions[0](x, y)}')
+                print(f'origin x & y = {criterions[0](x, y)}')
 
             x_in = torch.cat((x, y), dim=1)
             output = model(x_in)
@@ -125,6 +125,11 @@ def main():
                 loss_vals.append(curr_loss)
                 loss += curr_loss
             loss_all.update(loss.item(), y.numel())
+
+            with torch.no_grad():
+                print(f'warped x & x = {criterions[0](output[0], x)}')
+                print(output[1][0][:, 50:55, 50:55])
+
             # compute gradient and do SGD step
             optimizer.zero_grad()
             loss.backward()
@@ -232,6 +237,7 @@ def comput_fig(img):
             # gray
             plt.imshow(img_local, cmap='gray')
         else:
+            img_local = img_local.astype(np.uint8)
             plt.imshow(img_local)
     fig.subplots_adjust(wspace=0, hspace=0)
     return fig
