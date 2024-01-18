@@ -37,14 +37,14 @@ def main():
     batch_size = 28
     train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
     val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
-    weights = [1, 10]  # loss weights
+    weights = [1, 1]  # loss weights
     save_dir = 'TransMorph_ssim_{}_diffusion_{}/'.format(weights[0], weights[1])
     if not os.path.exists('experiments/' + save_dir):
         os.makedirs('experiments/' + save_dir)
     if not os.path.exists('logs/' + save_dir):
         os.makedirs('logs/' + save_dir)
     sys.stdout = Logger('logs/' + save_dir)
-    lr = 0.001  # learning rate
+    lr = 0.0001  # learning rate
     epoch_start = 0
     max_epoch = 400  # max traning epoch
 
@@ -265,7 +265,7 @@ def set_random_seed(seed, deterministic=True):
 
 
 if __name__ == '__main__':
-    # set randomseed
+    # set random seed
     set_random_seed(12345)
 
     '''
