@@ -84,8 +84,8 @@ def main():
     optimizer = optim.Adam(model.parameters(), lr=updated_lr, weight_decay=0, amsgrad=True)
     ssim = SSIM(data_range=1, size_average=True, channel=1)
 
-    # losses.SSIM_loss(False)
     criterions = [losses.SSIM_loss(data_range=1, if_MS=False), losses.Grad('l2')]
+    # criterions = [losses.MSE_loss_2D(), losses.Grad('l2')]
 
     best_ncc = 0
     writer = SummaryWriter(log_dir='logs/' + save_dir)
@@ -103,8 +103,18 @@ def main():
             data = [t.cuda() for t in data]
             x = data[-2]
             y = data[-1]
+
+            with torch.no_grad():
+                print(f'origin = {criterions[0](x, y)}')
+
             x_in = torch.cat((x, y), dim=1)
             output = model(x_in)
+            # print(x_in.shape)
+            # print(output[0].shape)
+            # print(output[1].shape)
+            # # torch.Size([28, 2, 256, 256])
+            # # torch.Size([28, 1, 256, 256])
+            # # torch.Size([28, 2, 256, 256])
             loss = 0
             loss_vals = []
             for n, loss_function in enumerate(criterions):
@@ -172,7 +182,7 @@ def main():
                 ncc = ssim(output[0], y)
                 eval_ncc.update(ncc.item(), y.numel())
 
-                grid_img = mk_grid_img(16, 2, (x.shape[0], config.img_size[0], config.img_size[1]))
+                grid_img = mk_grid_img(8, 1, (x.shape[0], config.img_size[0], config.img_size[1]))
                 def_out = []
                 channel_dim = 1
                 for idx in range(3):
