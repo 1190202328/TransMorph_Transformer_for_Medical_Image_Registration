@@ -39,7 +39,7 @@ def main():
     # val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
     train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/training'
     val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/testing'
-    weights = [1, 1]  # loss weights
+    weights = [1, 5]  # loss weights
     save_dir = 'TransMorph_ssim_{}_diffusion_{}/'.format(weights[0], weights[1])
     if not os.path.exists('experiments/' + save_dir):
         os.makedirs('experiments/' + save_dir)
