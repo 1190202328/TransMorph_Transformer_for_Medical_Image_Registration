@@ -34,7 +34,7 @@ class Logger(object):
 
 
 def main():
-    batch_size = 96
+    batch_size = 128
     # train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
     # val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
     train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/training'
@@ -48,7 +48,7 @@ def main():
     sys.stdout = Logger('logs/' + save_dir)
     lr = 0.0001  # learning rate
     epoch_start = 0
-    max_epoch = 400  # max traning epoch
+    max_epoch = 100  # max traning epoch
 
     '''
     Initialize model
