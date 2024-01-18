@@ -1,11 +1,13 @@
-import torch
-import torch.nn.functional as F
-from torch.autograd import Variable
-import numpy as np
-from math import exp
 import math
+from math import exp
+
+import numpy as np
+import torch
 import torch.nn as nn
-from pytorch_msssim import ssim, ms_ssim, SSIM, MS_SSIM
+import torch.nn.functional as F
+from pytorch_msssim import SSIM, MS_SSIM
+from torch.autograd import Variable
+
 
 class NLLLoss(nn.Module):
 
@@ -27,6 +29,7 @@ class NLLLoss(nn.Module):
         else:
             return loss
 
+
 class SSIM_loss(torch.nn.Module):
     def __init__(self, data_range=255, if_MS=True, win_size=11):
         super(SSIM_loss, self).__init__()
@@ -34,15 +37,9 @@ class SSIM_loss(torch.nn.Module):
             self.SSIM = MS_SSIM(win_size=win_size, data_range=data_range, size_average=True, channel=1)
         else:
             self.SSIM = SSIM(data_range=data_range, size_average=True, channel=1)
+
     def forward(self, img1, img2):
         return -self.SSIM(img1, img2)
-
-class MSE_loss_2D(torch.nn.Module):
-    def __init__(self):
-        super(MSE_loss_2D, self).__init__()
-        self.loss = torch.nn.MSELoss()
-    def forward(self, img1, img2):
-        return -self.loss(img1, img2)
 
 
 def gaussian(window_size, sigma):
@@ -113,8 +110,6 @@ def _ssim_3D(img1, img2, window, window_size, channel, size_average=True):
         return ssim_map.mean(1).mean(1).mean(1)
 
 
-
-
 class SSIM3D(torch.nn.Module):
     def __init__(self, window_size=11, size_average=True):
         super(SSIM3D, self).__init__()
@@ -138,7 +133,7 @@ class SSIM3D(torch.nn.Module):
             self.window = window
             self.channel = channel
 
-        return 1-_ssim_3D(img1, img2, window, self.window_size, channel, self.size_average)
+        return 1 - _ssim_3D(img1, img2, window, self.window_size, channel, self.size_average)
 
 
 def ssim(img1, img2, window_size=11, size_average=True):
@@ -188,6 +183,7 @@ class Grad(torch.nn.Module):
             grad *= self.loss_mult
         return grad
 
+
 class Grad3d(torch.nn.Module):
     """
     N-D gradient loss.
@@ -215,10 +211,12 @@ class Grad3d(torch.nn.Module):
             grad *= self.loss_mult
         return grad
 
+
 class Grad_hyper(torch.nn.Module):
     """
     N-D gradient loss.
     """
+
     def __init__(self, penalty='l1'):
         super(Grad_hyper, self).__init__()
         self.penalty = penalty
@@ -237,6 +235,7 @@ class Grad_hyper(torch.nn.Module):
 
         return torch.mean(grad)
 
+
 class GradiTV(torch.nn.Module):
     """
     N-D gradient loss.
@@ -250,9 +249,10 @@ class GradiTV(torch.nn.Module):
         dx = torch.abs(y_pred[:, :, 1:, 1:] - y_pred[:, :, 1:, :-1])
         dy = dy * dy
         dx = dx * dx
-        d = torch.mean(torch.sqrt(dx+dy+1e-6))
+        d = torch.mean(torch.sqrt(dx + dy + 1e-6))
         grad = d / 3.0
         return grad
+
 
 class Grad3DiTV(torch.nn.Module):
     """
@@ -270,21 +270,24 @@ class Grad3DiTV(torch.nn.Module):
         dy = dy * dy
         dx = dx * dx
         dz = dz * dz
-        d = torch.mean(torch.sqrt(dx+dy+dz+1e-6))
+        d = torch.mean(torch.sqrt(dx + dy + dz + 1e-6))
         grad = d / 3.0
         return grad
+
 
 class DisplacementRegularizer2D(torch.nn.Module):
     def __init__(self, energy_type):
         super().__init__()
         self.energy_type = energy_type
 
-    def gradient_dx(self, fv): return (fv[:, 2:, 1:-1] - fv[:, :-2, 1:-1]) / 2
+    def gradient_dx(self, fv):
+        return (fv[:, 2:, 1:-1] - fv[:, :-2, 1:-1]) / 2
 
-    def gradient_dy(self, fv): return (fv[:, 1:-1, 2:] - fv[:, 1:-1, :-2]) / 2
+    def gradient_dy(self, fv):
+        return (fv[:, 1:-1, 2:] - fv[:, 1:-1, :-2]) / 2
 
     def gradient_txyz(self, Txyz, fn):
-        return torch.stack([fn(Txyz[:,i,...]) for i in [0, 1]], dim=1)
+        return torch.stack([fn(Txyz[:, i, ...]) for i in [0, 1]], dim=1)
 
     def compute_gradient_norm(self, displacement, flag_l1=False):
         dTdx = self.gradient_txyz(displacement, self.gradient_dx)
@@ -292,8 +295,8 @@ class DisplacementRegularizer2D(torch.nn.Module):
         if flag_l1:
             norms = torch.abs(dTdx) + torch.abs(dTdy)
         else:
-            norms = dTdx**2 + dTdy**2
-        return torch.mean(norms)/2.0
+            norms = dTdx ** 2 + dTdy ** 2
+        return torch.mean(norms) / 2.0
 
     def compute_bending_energy(self, displacement):
         dTdx = self.gradient_txyz(displacement, self.gradient_dx)
@@ -301,7 +304,7 @@ class DisplacementRegularizer2D(torch.nn.Module):
         dTdxx = self.gradient_txyz(dTdx, self.gradient_dx)
         dTdyy = self.gradient_txyz(dTdy, self.gradient_dy)
         dTdxy = self.gradient_txyz(dTdx, self.gradient_dy)
-        return torch.mean(dTdxx**2 + dTdyy**2 + 2*dTdxy**2)
+        return torch.mean(dTdxx ** 2 + dTdyy ** 2 + 2 * dTdxy ** 2)
 
     def forward(self, disp, _):
         if self.energy_type == 'bending':
@@ -314,19 +317,23 @@ class DisplacementRegularizer2D(torch.nn.Module):
             raise Exception('Not recognised local regulariser!')
         return energy
 
+
 class DisplacementRegularizer(torch.nn.Module):
     def __init__(self, energy_type):
         super().__init__()
         self.energy_type = energy_type
 
-    def gradient_dx(self, fv): return (fv[:, 2:, 1:-1, 1:-1] - fv[:, :-2, 1:-1, 1:-1]) / 2
+    def gradient_dx(self, fv):
+        return (fv[:, 2:, 1:-1, 1:-1] - fv[:, :-2, 1:-1, 1:-1]) / 2
 
-    def gradient_dy(self, fv): return (fv[:, 1:-1, 2:, 1:-1] - fv[:, 1:-1, :-2, 1:-1]) / 2
+    def gradient_dy(self, fv):
+        return (fv[:, 1:-1, 2:, 1:-1] - fv[:, 1:-1, :-2, 1:-1]) / 2
 
-    def gradient_dz(self, fv): return (fv[:, 1:-1, 1:-1, 2:] - fv[:, 1:-1, 1:-1, :-2]) / 2
+    def gradient_dz(self, fv):
+        return (fv[:, 1:-1, 1:-1, 2:] - fv[:, 1:-1, 1:-1, :-2]) / 2
 
     def gradient_txyz(self, Txyz, fn):
-        return torch.stack([fn(Txyz[:,i,...]) for i in [0, 1, 2]], dim=1)
+        return torch.stack([fn(Txyz[:, i, ...]) for i in [0, 1, 2]], dim=1)
 
     def compute_gradient_norm(self, displacement, flag_l1=False):
         dTdx = self.gradient_txyz(displacement, self.gradient_dx)
@@ -335,8 +342,8 @@ class DisplacementRegularizer(torch.nn.Module):
         if flag_l1:
             norms = torch.abs(dTdx) + torch.abs(dTdy) + torch.abs(dTdz)
         else:
-            norms = dTdx**2 + dTdy**2 + dTdz**2
-        return torch.mean(norms)/3.0
+            norms = dTdx ** 2 + dTdy ** 2 + dTdz ** 2
+        return torch.mean(norms) / 3.0
 
     def compute_bending_energy(self, displacement):
         dTdx = self.gradient_txyz(displacement, self.gradient_dx)
@@ -348,7 +355,7 @@ class DisplacementRegularizer(torch.nn.Module):
         dTdxy = self.gradient_txyz(dTdx, self.gradient_dy)
         dTdyz = self.gradient_txyz(dTdy, self.gradient_dz)
         dTdxz = self.gradient_txyz(dTdx, self.gradient_dz)
-        return torch.mean(dTdxx**2 + dTdyy**2 + dTdzz**2 + 2*dTdxy**2 + 2*dTdxz**2 + 2*dTdyz**2)
+        return torch.mean(dTdxx ** 2 + dTdyy ** 2 + dTdzz ** 2 + 2 * dTdxy ** 2 + 2 * dTdxz ** 2 + 2 * dTdyz ** 2)
 
     def forward(self, disp, _):
         if self.energy_type == 'bending':
@@ -360,6 +367,7 @@ class DisplacementRegularizer(torch.nn.Module):
         else:
             raise Exception('Not recognised local regulariser!')
         return energy
+
 
 class NCC_vxm(torch.nn.Module):
     """
@@ -424,6 +432,7 @@ class NCC_vxm(torch.nn.Module):
 
         return -torch.mean(cc)
 
+
 class crossCorrelation3D(nn.Module):
     def __init__(self, in_ch=1, kernel=(9, 9), voxel_weights=None):
         super(crossCorrelation3D, self).__init__()
@@ -432,13 +441,12 @@ class crossCorrelation3D(nn.Module):
         self.voxel_weight = voxel_weights
         self.filt = (torch.ones([1, in_ch, self.kernel[0], self.kernel[1]])).cuda()
 
-
     def forward(self, input, target):
         II = input * input
         TT = target * target
         IT = input * target
 
-        pad = (int((self.kernel[0]-1)/2), int((self.kernel[1]-1)/2))
+        pad = (int((self.kernel[0] - 1) / 2), int((self.kernel[1] - 1) / 2))
         T_sum = F.conv2d(target, self.filt, stride=1, padding=pad)
         I_sum = F.conv2d(input, self.filt, stride=1, padding=pad)
         TT_sum = F.conv2d(TT, self.filt, stride=1, padding=pad)
@@ -449,32 +457,37 @@ class crossCorrelation3D(nn.Module):
         That = T_sum / kernelSize
 
         # cross = (I-Ihat)(J-Jhat)
-        cross = IT_sum - Ihat*T_sum - That*I_sum + That*Ihat*kernelSize
-        T_var = TT_sum - 2*That*T_sum + That*That*kernelSize
-        I_var = II_sum - 2*Ihat*I_sum + Ihat*Ihat*kernelSize
-        cc = cross*cross / (T_var*I_var+1e-5)
+        cross = IT_sum - Ihat * T_sum - That * I_sum + That * Ihat * kernelSize
+        T_var = TT_sum - 2 * That * T_sum + That * That * kernelSize
+        I_var = II_sum - 2 * Ihat * I_sum + Ihat * Ihat * kernelSize
+        cc = cross * cross / (T_var * I_var + 1e-5)
 
         loss = -1.0 * torch.mean(cc)
         return loss
 
 
 class PCC(torch.nn.Module):
-    def __init__(self,):
+    def __init__(self, ):
         super(PCC, self).__init__()
 
     def pcc(self, y_true, y_pred):
         A_bar = torch.mean(y_pred, dim=[1, 2, 3], keepdim=True)
         B_bar = torch.mean(y_true, dim=[1, 2, 3], keepdim=True)
         top = torch.mean((y_pred - A_bar) * (y_true - B_bar), dim=[1, 2, 3], keepdim=True)
-        bottom = torch.sqrt(torch.mean((y_pred - A_bar) ** 2, dim=[1, 2, 3], keepdim=True) * torch.mean((y_true - B_bar) ** 2, dim=[1, 2, 3, 4], keepdim=True))
-        return torch.mean(top/bottom)
+        bottom = torch.sqrt(
+            torch.mean((y_pred - A_bar) ** 2, dim=[1, 2, 3], keepdim=True) * torch.mean((y_true - B_bar) ** 2,
+                                                                                        dim=[1, 2, 3, 4], keepdim=True))
+        return torch.mean(top / bottom)
 
     def forward(self, I, J):
-        return (1-self.pcc(I,J))
+        return (1 - self.pcc(I, J))
+
 
 '''
 Weighted PCC + SSIM
 '''
+
+
 class PCC_SSIM(torch.nn.Module):
     def __init__(self, pcc_wt=0.5):
         super(PCC_SSIM, self).__init__()
@@ -486,15 +499,17 @@ class PCC_SSIM(torch.nn.Module):
         A_bar = torch.mean(y_pred, dim=[1, 2, 3], keepdim=True)
         B_bar = torch.mean(y_true, dim=[1, 2, 3], keepdim=True)
         top = torch.mean((y_pred - A_bar) * (y_true - B_bar), dim=[1, 2, 3], keepdim=True)
-        bottom = torch.sqrt(torch.mean((y_pred - A_bar) ** 2, dim=[1, 2, 3], keepdim=True) * torch.mean((y_true - B_bar) ** 2, dim=[1, 2, 3], keepdim=True))
-        return torch.mean(top/bottom)
+        bottom = torch.sqrt(
+            torch.mean((y_pred - A_bar) ** 2, dim=[1, 2, 3], keepdim=True) * torch.mean((y_true - B_bar) ** 2,
+                                                                                        dim=[1, 2, 3], keepdim=True))
+        return torch.mean(top / bottom)
 
     def ssim(self, I, J):
         SSIM_idx = self.ssim(I, J)
         return SSIM_idx
 
     def forward(self, I, J):
-        return self.pcc_wt*(1-self.pcc(I,J)) + self.ssim_wt*(self.ssim(I,J))
+        return self.pcc_wt * (1 - self.pcc(I, J)) + self.ssim_wt * (self.ssim(I, J))
 
 
 class MIND_loss(torch.nn.Module):
@@ -548,7 +563,7 @@ class MIND_loss(torch.nn.Module):
         # compute patch-ssd
         ssd = F.avg_pool3d(rpad2(
             (F.conv3d(rpad1(img), mshift1, dilation=dilation) - F.conv3d(rpad1(img), mshift2, dilation=dilation)) ** 2),
-                           kernel_size, stride=1)
+            kernel_size, stride=1)
 
         # MIND equation
         mind = ssd - torch.min(ssd, 1, keepdim=True)[0]
@@ -564,6 +579,7 @@ class MIND_loss(torch.nn.Module):
 
     def forward(self, y_pred, y_true):
         return torch.mean((self.MINDSSC(y_pred) - self.MINDSSC(y_true)) ** 2)
+
 
 class MutualInformation(torch.nn.Module):
     """
@@ -622,6 +638,7 @@ class MutualInformation(torch.nn.Module):
 
     def forward(self, y_true, y_pred):
         return -self.mi(y_true, y_pred)
+
 
 class localMutualInformation(torch.nn.Module):
     """
