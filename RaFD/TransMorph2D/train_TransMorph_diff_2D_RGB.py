@@ -15,8 +15,8 @@ from torchvision import transforms
 
 import utils
 from data import datasets
-from models.TransMorph_diff import CONFIGS as CONFIGS_TM
-from models.TransMorph_diff import TransMorphDiff, Bilinear
+from models.TransMorph_diff_rgb import CONFIGS as CONFIGS_TM
+from models.TransMorph_diff_rgb import TransMorphDiffRGB, Bilinear
 
 
 class Logger(object):
@@ -37,6 +37,7 @@ def main():
     # val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
     train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/training'
     val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/testing'
+    model_name = 'TransMorphDiffRGB'
 
     # need change
     batch_size = 196
@@ -49,7 +50,7 @@ def main():
 
     # change done
 
-    save_dir = 'TransMorphDiff_ssim_{}_diffusion_{}/'.format(weights[0], weights[1])
+    save_dir = '{}_rec_{}_norm_{}/'.format(model_name, weights[0], weights[1])
     if not os.path.exists('experiments/' + save_dir):
         os.makedirs('experiments/' + save_dir)
     if not os.path.exists('logs/' + save_dir):
@@ -62,8 +63,8 @@ def main():
     '''
     Initialize model
     '''
-    config = CONFIGS_TM['TransMorphDiff']
-    model = TransMorphDiff(config, recon_loss_fuc=recon_loss_fuc)
+    config = CONFIGS_TM[model_name]
+    model = TransMorphDiffRGB(config, recon_loss_fuc=recon_loss_fuc)
     model.cuda()
 
     '''

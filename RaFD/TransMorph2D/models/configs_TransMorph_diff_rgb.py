@@ -30,7 +30,7 @@ image_sigma (float): Weight for MSE in the loss
 prior_lambda (float): Weight for sigma terms in the loss
 prior_lambda_mean (float): Weight for precision terms in the loss
 '''
-def get_TransMorphDiff_config():
+def get_TransMorphDiff_rgb_config():
     '''
     Trainable params: 15,201,579
     '''

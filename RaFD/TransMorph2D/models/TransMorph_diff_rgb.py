@@ -14,18 +14,17 @@ jchen245@jhmi.edu
 Johns Hopkins University
 '''
 
-
+import models.TransMorph as TM
+import models.configs_TransMorph_diff_rgb as configs
+import models.finite_differences as fdt
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import numpy as np
-from functools import partial
-import models.finite_differences as fdt
-import models.TransMorph as TM
-import models.configs_TransMorph_diff as configs
 
 dim = 2
 reproduce_paper_result = False
+
 
 def not_normalized_identity_map(sz):
     """
@@ -48,6 +47,7 @@ def not_normalized_identity_map(sz):
     # id= id*2-1
     return torch.from_numpy(id.astype(np.float32))
 
+
 def identity_map_for_reproduce(sz):
     """
     Returns an identity map.
@@ -69,7 +69,8 @@ def identity_map_for_reproduce(sz):
     # id= id*2-1
     return torch.from_numpy(id.astype(np.float32))
 
-def identity_map(sz, dtype= np.float32):
+
+def identity_map(sz, dtype=np.float32):
     """
     Returns an identity map.
     :param sz: just the spatial dimensions, i.e., XxYxZ
@@ -90,15 +91,16 @@ def identity_map(sz, dtype= np.float32):
     id = np.array(id.astype(dtype))
     if dim == 1:
         id = id.reshape(1, sz[0])  # add a dummy first index
-    spacing = 1./ (np.array(sz)-1)
+    spacing = 1. / (np.array(sz) - 1)
 
     for d in range(dim):
         id[d] *= spacing[d]
-        id[d] = id[d]*2 - 1
+        id[d] = id[d] * 2 - 1
 
     return torch.from_numpy(id.astype(np.float32))
 
-def gen_identity_map(img_sz, resize_factor=1.,normalized=True):
+
+def gen_identity_map(img_sz, resize_factor=1., normalized=True):
     """
     given displacement field,  add displacement on grid field
     """
@@ -112,7 +114,8 @@ def gen_identity_map(img_sz, resize_factor=1.,normalized=True):
         grid = not_normalized_identity_map(img_sz)
     return grid
 
-def scale_map(map,spacing):
+
+def scale_map(map, spacing):
     """
     Scales the map to the [-1,1]^d format
     :param map: map in BxCxXxYxZ format
@@ -128,14 +131,15 @@ def scale_map(map,spacing):
     # id[d]-=1.
 
     for d in range(ndim):
-        if sz[d+2] >1:
+        if sz[d + 2] > 1:
             map_scaled[:, d, ...] = map[:, d, ...] * (2. / (sz[d + 2] - 1.) / spacing[d]) - 1.
         else:
-            map_scaled[:, d, ...] = map[:,d,...]
+            map_scaled[:, d, ...] = map[:, d, ...]
 
     return map_scaled
 
-def scale_map_grad(grad_map,spacing):
+
+def scale_map_grad(grad_map, spacing):
     """
     Scales the gradient back
     :param grad_map: gradient (computed based on map normalized to [-1,1]
@@ -147,19 +151,20 @@ def scale_map_grad(grad_map,spacing):
     sz = grad_map.size()
     ndim = len(spacing)
     for d in range(ndim):
-        #grad_map[:, d, ...] *= spacing[d] * (sz[d + 2] - 1) / 2.
-        #grad_map[:, d, ...] *= (sz[d + 2] - 1)/2.
+        # grad_map[:, d, ...] *= spacing[d] * (sz[d + 2] - 1) / 2.
+        # grad_map[:, d, ...] *= (sz[d + 2] - 1)/2.
         if sz[d + 2] > 1:
-            grad_map[:, d, ...]  *= (2. / (sz[d + 2] - 1.) / spacing[d])
+            grad_map[:, d, ...] *= (2. / (sz[d + 2] - 1.) / spacing[d])
         else:
             grad_map[:, d, ...] = grad_map[:, d, ...]
+
 
 class STNFunction_ND_BCXYZ(nn.Module):
     """
    Spatial transform function for 1D, 2D, and 3D. In BCXYZ format (this IS the format used in the current toolbox).
    """
 
-    def __init__(self, spacing, zero_boundary = False,using_bilinear=True,using_01_input=True):
+    def __init__(self, spacing, zero_boundary=False, using_bilinear=True, using_01_input=True):
         """
         Constructor
         :param ndim: (int) spatial transformation of the transform
@@ -167,13 +172,13 @@ class STNFunction_ND_BCXYZ(nn.Module):
         super(STNFunction_ND_BCXYZ, self).__init__()
         self.spacing = spacing
         self.ndim = len(spacing)
-        #zero_boundary = False
+        # zero_boundary = False
         self.zero_boundary = 'zeros' if zero_boundary else 'border'
         self.mode = 'bilinear' if using_bilinear else 'nearest'
-        self.using_01_input=using_01_input
+        self.using_01_input = using_01_input
 
     def forward_stn(self, input1, input2, ndim):
-        if ndim==1:
+        if ndim == 1:
             # use 2D interpolation to mimick 1D interpolation
             # now test this for 1D
             phi_rs = input2.reshape(list(input2.size()) + [1])
@@ -182,26 +187,28 @@ class STNFunction_ND_BCXYZ(nn.Module):
             phi_rs_size = list(phi_rs.size())
             phi_rs_size[1] = 2
 
-            phi_rs_ordered = torch.zeros(phi_rs_size,dtype=phi_rs.dtype,device=phi_rs.device)
+            phi_rs_ordered = torch.zeros(phi_rs_size, dtype=phi_rs.dtype, device=phi_rs.device)
             # keep dimension 1 at zero
             phi_rs_ordered[:, 1, ...] = phi_rs[:, 0, ...]
 
-            output_rs = torch.nn.functional.grid_sample(input1_rs, phi_rs_ordered.permute([0, 2, 3, 1]), mode=self.mode, padding_mode=self.zero_boundary,align_corners=True)
+            output_rs = torch.nn.functional.grid_sample(input1_rs, phi_rs_ordered.permute([0, 2, 3, 1]), mode=self.mode,
+                                                        padding_mode=self.zero_boundary, align_corners=True)
             output = output_rs[:, :, :, 0]
 
-        if ndim==2:
+        if ndim == 2:
             # todo double check, it seems no transpose is need for 2d, already in height width design
             input2_ordered = torch.zeros_like(input2)
-            input2_ordered[:,0,...] = input2[:,1,...]
-            input2_ordered[:,1,...] = input2[:,0,...]
+            input2_ordered[:, 0, ...] = input2[:, 1, ...]
+            input2_ordered[:, 1, ...] = input2[:, 0, ...]
             output = torch.nn.functional.grid_sample(input1, input2_ordered.permute([0, 2, 3, 1]), mode=self.mode,
-                                          padding_mode=self.zero_boundary,align_corners=True)
-        if ndim==3:
+                                                     padding_mode=self.zero_boundary, align_corners=True)
+        if ndim == 3:
             input2_ordered = torch.zeros_like(input2)
             input2_ordered[:, 0, ...] = input2[:, 2, ...]
             input2_ordered[:, 1, ...] = input2[:, 1, ...]
             input2_ordered[:, 2, ...] = input2[:, 0, ...]
-            output = torch.nn.functional.grid_sample(input1, input2_ordered.permute([0, 2, 3, 4, 1]), mode=self.mode, padding_mode=self.zero_boundary,align_corners=True)
+            output = torch.nn.functional.grid_sample(input1, input2_ordered.permute([0, 2, 3, 4, 1]), mode=self.mode,
+                                                     padding_mode=self.zero_boundary, align_corners=True)
         return output
 
     def forward(self, input1, input2):
@@ -212,25 +219,29 @@ class STNFunction_ND_BCXYZ(nn.Module):
         :return: spatially transformed image in BCXYZ format
         """
 
-        assert(len(self.spacing)+2==len(input2.size()))
+        assert (len(self.spacing) + 2 == len(input2.size()))
         if self.using_01_input:
-            output = self.forward_stn(input1, scale_map(input2,self.spacing), self.ndim)
+            output = self.forward_stn(input1, scale_map(input2, self.spacing), self.ndim)
         else:
             output = self.forward_stn(input1, input2, self.ndim)
         # print(STNVal(output, ini=-1).sum())
         return output
 
+
 class STN_ND_BCXYZ(nn.Module):
     """
     Spatial transform code for nD spatial transoforms. Uses the BCXYZ image format.
     """
-    def __init__(self, spacing, zero_boundary=False,use_bilinear=True,use_01_input=True,):
+
+    def __init__(self, spacing, zero_boundary=False, use_bilinear=True, use_01_input=True, ):
         super(STN_ND_BCXYZ, self).__init__()
         self.spacing = spacing
         """spatial dimension"""
-        self.f = STNFunction_ND_BCXYZ( self.spacing,zero_boundary= zero_boundary,using_bilinear= use_bilinear,using_01_input = use_01_input)
+        self.f = STNFunction_ND_BCXYZ(self.spacing, zero_boundary=zero_boundary, using_bilinear=use_bilinear,
+                                      using_01_input=use_01_input)
 
         """spatial transform function"""
+
     def forward(self, input1, input2):
         """
        Simply returns the transformed input
@@ -240,10 +251,12 @@ class STN_ND_BCXYZ(nn.Module):
        """
         return self.f(input1, input2)
 
+
 class convBlock(nn.Module):
     """
     A convolutional block including conv, BN, nonliear activiation, residual connection
     """
+
     def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1,
                  bias=True, batchnorm=False, residual=False, nonlinear=nn.LeakyReLU(0.2)):
         """
@@ -265,7 +278,7 @@ class convBlock(nn.Module):
         self.residual = residual
 
     def forward(self, x):
-        x= self.conv(x)
+        x = self.conv(x)
         if self.bn:
             x = self.bn(x)
         if self.nonlinear:
@@ -274,6 +287,7 @@ class convBlock(nn.Module):
             x += x
 
         return x
+
 
 class Bilinear(nn.Module):
     """
@@ -297,7 +311,7 @@ class Bilinear(nn.Module):
         input2_ordered[:, 1, ...] = input2[:, 0, ...]
 
         output = torch.nn.functional.grid_sample(input1, input2_ordered.permute([0, 2, 3, 1]), mode=self.mode,
-                                                     padding_mode=self.zero_boundary, align_corners=True)
+                                                 padding_mode=self.zero_boundary, align_corners=True)
         return output
 
     def forward(self, input1, input2):
@@ -318,13 +332,14 @@ class Bilinear(nn.Module):
             return output
 
 
-class TransMorphDiff(nn.Module):
+class TransMorphDiffRGB(nn.Module):
     """
     Probabilistic TransMorph Model
     :return: Warped image, Deformation field, Displacement field
     """
+
     def __init__(self, config, recon_loss_fuc=None):
-        super(TransMorphDiff, self).__init__()
+        super(TransMorphDiffRGB, self).__init__()
         img_sz = config.img_size
         image_sigma = config.image_sigma
         prior_lambda = config.prior_lambda
@@ -332,8 +347,8 @@ class TransMorphDiff(nn.Module):
         self.input_channel = config.in_chans
         self.output_channel = 3
         self.img_sz = img_sz
-        self.low_res_img_sz = [int(x/2) for x in img_sz]
-        self.spacing = 1. / ( np.array(img_sz) - 1)
+        self.low_res_img_sz = [int(x / 2) for x in img_sz]
+        self.spacing = 1. / (np.array(img_sz) - 1)
         self.int_steps = 7
         self.image_sigma = image_sigma
         self.prior_lambda = prior_lambda
@@ -341,17 +356,17 @@ class TransMorphDiff(nn.Module):
         self.flow_vol_shape = self.low_res_img_sz
         self.D = self._degree_matrix(self.flow_vol_shape)
         self.D = (self.D).cuda()
-        self.loss_fn =  None
+        self.loss_fn = None
         self.recon_loss_fuc = recon_loss_fuc
 
         self.id_transform = gen_identity_map(self.img_sz, 1.0).cuda()
-        self.id_transform  =self.id_transform.view([1]+list(self.id_transform.shape))
+        self.id_transform = self.id_transform.view([1] + list(self.id_transform.shape))
 
         """to compatiable to the mesh setting in voxel morph"""
         self.low_res_id_transform = gen_identity_map(self.img_sz, 0.5, normalized=False).cuda()
         self.encoders = nn.ModuleList()
         self.decoders = nn.ModuleList()
-        self.bilinear = STN_ND_BCXYZ(np.array([1.,1.]),zero_boundary=True)
+        self.bilinear = STN_ND_BCXYZ(np.array([1., 1.]), zero_boundary=True)
         self.bilinear_img = Bilinear(zero_boundary=True)
         self.avg_pool = nn.AvgPool2d(3, stride=2, padding=1)
         if_convskip = config.if_convskip
@@ -360,41 +375,41 @@ class TransMorphDiff(nn.Module):
         self.if_transskip = if_transskip
         embed_dim = config.embed_dim
         self.transformer = TM.SwinTransformer(patch_size=config.patch_size,
-                                           in_chans=config.in_chans,
-                                           embed_dim=config.embed_dim,
-                                           depths=config.depths,
-                                           num_heads=config.num_heads,
-                                           window_size=config.window_size,
-                                           mlp_ratio=config.mlp_ratio,
-                                           qkv_bias=config.qkv_bias,
-                                           drop_rate=config.drop_rate,
-                                           drop_path_rate=config.drop_path_rate,
-                                           ape=config.ape,
-                                           spe=config.spe,
-                                           patch_norm=config.patch_norm,
-                                           use_checkpoint=config.use_checkpoint,
-                                           out_indices=config.out_indices,
-                                           pat_merg_rf=config.pat_merg_rf)
+                                              in_chans=config.in_chans,
+                                              embed_dim=config.embed_dim,
+                                              depths=config.depths,
+                                              num_heads=config.num_heads,
+                                              window_size=config.window_size,
+                                              mlp_ratio=config.mlp_ratio,
+                                              qkv_bias=config.qkv_bias,
+                                              drop_rate=config.drop_rate,
+                                              drop_path_rate=config.drop_path_rate,
+                                              ape=config.ape,
+                                              spe=config.spe,
+                                              patch_norm=config.patch_norm,
+                                              use_checkpoint=config.use_checkpoint,
+                                              out_indices=config.out_indices,
+                                              pat_merg_rf=config.pat_merg_rf)
         self.up0 = TM.DecoderBlock(embed_dim * 8, embed_dim * 4, skip_channels=embed_dim * 4 if if_transskip else 0,
-                                use_batchnorm=False)
+                                   use_batchnorm=False)
         self.up1 = TM.DecoderBlock(embed_dim * 4, embed_dim * 2, skip_channels=embed_dim * 2 if if_transskip else 0,
-                                use_batchnorm=False)
+                                   use_batchnorm=False)
         self.up2 = TM.DecoderBlock(embed_dim * 2, embed_dim, skip_channels=embed_dim if if_transskip else 0,
-                                use_batchnorm=False)
+                                   use_batchnorm=False)
         self.up3 = TM.DecoderBlock(embed_dim, config.reg_head_chan, skip_channels=embed_dim // 2 if if_convskip else 0,
-                                use_batchnorm=False)
+                                   use_batchnorm=False)
         self.c1 = TM.Conv2dReLU(2, embed_dim // 2, 3, 1, use_batchnorm=False)
 
-        self.flow_mean =  nn.Conv2d(config.reg_head_chan, 2, kernel_size=3, stride=1, padding=1, bias=True)
-        self.flow_sigma =  nn.Conv2d(config.reg_head_chan, 2, kernel_size=3, stride=1, padding=1, bias=True)
-        self.flow_mean.weight.data.normal_(0.,1e-5)
+        self.flow_mean = nn.Conv2d(config.reg_head_chan, 2, kernel_size=3, stride=1, padding=1, bias=True)
+        self.flow_sigma = nn.Conv2d(config.reg_head_chan, 2, kernel_size=3, stride=1, padding=1, bias=True)
+        self.flow_mean.weight.data.normal_(0., 1e-5)
         self.flow_mean.bias.data = torch.Tensor([0] * 2)
-        self.flow_sigma.weight.data.normal_(0.,1e-10)
-        self.flow_sigma.bias.data = torch.Tensor([-10]*2)
-        self.print_count=0
+        self.flow_sigma.weight.data.normal_(0., 1e-10)
+        self.flow_sigma.bias.data = torch.Tensor([-10] * 2)
+        self.print_count = 0
         # identity transform for computing displacement
 
-    def scale_map(self,map, spacing):
+    def scale_map(self, map, spacing):
         """
         Scales the map to the [-1,1]^d format
         :param map: map in BxCxXxYxZ format
@@ -425,13 +440,21 @@ class TransMorphDiff(nn.Module):
         source, target = inputs
         self.__do_some_clean()
         affine_map = self.id_transform.clone()
+        # source.shape=torch.Size([196, 1, 256, 256])
+        # target.shape=torch.Size([196, 1, 256, 256])
+        # affine_map.shape=torch.Size([1, 2, 256, 256])
         x = torch.cat((source, target), dim=1)
+        # x.shape=torch.Size([196, 2, 256, 256])
         if self.if_convskip:
             x_s1 = self.avg_pool(x)
             f4 = self.c1(x_s1)
         else:
             f4 = None
         out = self.transformer(x)
+        # out[0].shape=torch.Size([196, 96, 64, 64])
+        # out[1].shape=torch.Size([196, 192, 32, 32])
+        # out[2].shape=torch.Size([196, 384, 16, 16])
+        # out[3].shape=torch.Size([196, 768, 8, 8])
 
         if self.if_transskip:
             f1 = out[-2]
@@ -445,8 +468,11 @@ class TransMorphDiff(nn.Module):
         x = self.up1(x, f2)
         x = self.up2(x, f3)
         x = self.up3(x, f4)
+        # x.shape=torch.Size([196, 16, 128, 128])
         flow_mean = self.flow_mean(x)
         log_sigma = self.flow_sigma(x)
+        # flow_mean.shape=torch.Size([196, 2, 128, 128])
+        # log_sigma.shape=torch.Size([196, 2, 128, 128])
         noise = torch.randn(flow_mean.shape).cuda()
         if self.training:
             flow = flow_mean + torch.exp(log_sigma / 2.0) * noise
@@ -457,10 +483,10 @@ class TransMorphDiff(nn.Module):
             flow_1 = self.bilinear(flow, deform_field)
             flow = flow_1 + flow
         disp_field = F.interpolate(flow, scale_factor=2, mode='bilinear')
-        disp_field = self.scale_map(disp_field,np.array([1,1]))
+        disp_field = self.scale_map(disp_field, np.array([1, 1]))
         deform_field = disp_field + affine_map
         warped_source = self.bilinear_img(source, deform_field)
-        self.res_flow_mean  = flow
+        self.res_flow_mean = flow
         self.res_log_sigma = log_sigma
         self.warped = warped_source
         self.target = target
@@ -473,6 +499,7 @@ class TransMorphDiff(nn.Module):
 
     def get_extra_to_plot(self):
         return None, None
+
     def __do_some_clean(self):
         self.res_flow_mean = None
         self.res_log_sigma = None
@@ -480,16 +507,16 @@ class TransMorphDiff(nn.Module):
         self.target = None
         self.source = None
 
-    def scale_reg_loss(self,):
+    def scale_reg_loss(self, ):
         reg = self.kl_loss()
         return reg
 
-    def get_sim_loss(self,):
+    def get_sim_loss(self, ):
         loss = self.recon_loss()
         return loss
 
-    def get_id_loss(self,):
-        loss = torch.mean((self.flow_id)**2)
+    def get_id_loss(self, ):
+        loss = torch.mean((self.flow_id) ** 2)
         return loss
 
     def _adj_filt(self, ndims):
@@ -518,7 +545,7 @@ class TransMorphDiff(nn.Module):
     def _degree_matrix(self, vol_shape):
         # get shape stats
         ndims = len(vol_shape)
-        sz = [ndims,*vol_shape]  # 96 96 40 3  ##!!!!!!!!
+        sz = [ndims, *vol_shape]  # 96 96 40 3  ##!!!!!!!!
 
         # prepare conv kernel
         conv_fn = F.conv2d  ##!!!!!!!!
@@ -527,7 +554,7 @@ class TransMorphDiff(nn.Module):
         z = torch.ones([1] + sz)  # 1 96 96 40 3
         filt_tf = torch.Tensor(self._adj_filt(ndims))  # 3 3 3 3 ##!!!!!!!!
         strides = [1] * (ndims)  ##!!!!!!!!
-        return conv_fn(z, filt_tf, padding= 1, stride =strides)  ##!!!!!!!!
+        return conv_fn(z, filt_tf, padding=1, stride=strides)  ##!!!!!!!!
 
     def prec_loss(self, disp):  ##!!!!!!!!
         """
@@ -578,16 +605,16 @@ class TransMorphDiff(nn.Module):
         y_true = self.target
 
         if self.recon_loss_fuc is None:
-            return 1. / (self.image_sigma ** 2) * torch.mean((y_true - y_pred)**2)  ##!!!!!!!!
+            return 1. / (self.image_sigma ** 2) * torch.mean((y_true - y_pred) ** 2)  ##!!!!!!!!
         else:
             return self.recon_loss_fuc(y_pred, y_true)
 
     def get_loss(self):
         sim_loss = self.get_sim_loss()
         reg_loss = self.scale_reg_loss()
-        return sim_loss+ reg_loss
+        return sim_loss + reg_loss
 
-    def get_inverse_map(self,):
+    def get_inverse_map(self, ):
         _, inverse_map = self.forward(self.target, self.source)
         return inverse_map
 
@@ -602,5 +629,5 @@ class TransMorphDiff(nn.Module):
 
 
 CONFIGS = {
-    'TransMorphDiff': configs.get_TransMorphDiff_config(),
+    'TransMorphDiffRGB': configs.get_TransMorphDiff_rgb_config(),
 }
