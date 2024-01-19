@@ -338,9 +338,12 @@ class TransMorphDiffRGB(nn.Module):
     :return: Warped image, Deformation field, Displacement field
     """
 
-    def __init__(self, config, recon_loss_fuc=None, channel=1):
+    def __init__(self, config, recon_loss_fuc=None, channel=1, use_grad=False):
         super(TransMorphDiffRGB, self).__init__()
         self.channel = channel
+        self.use_grad = use_grad
+        if self.use_grad:
+            self.channel += 1
         config.in_chans = config.in_chans * self.channel
         img_sz = config.img_size
         image_sigma = config.image_sigma

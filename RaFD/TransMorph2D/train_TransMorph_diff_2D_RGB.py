@@ -38,7 +38,9 @@ def main():
     train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/training'
     val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/testing'
     model_name = 'TransMorphDiffRGB'
-    channel = 3
+    channel = 3  # 1 for grey or 3 for rgb
+    rgb_range = 1  # 1 or 255
+    use_grad = False
 
     # need change
     batch_size = 196
@@ -65,7 +67,7 @@ def main():
     Initialize model
     '''
     config = CONFIGS_TM[model_name]
-    model = TransMorphDiffRGB(config, recon_loss_fuc=recon_loss_fuc, channel=channel)
+    model = TransMorphDiffRGB(config, recon_loss_fuc=recon_loss_fuc, channel=channel, use_grad=use_grad)
     model.cuda()
 
     '''
@@ -95,14 +97,14 @@ def main():
     ])
     # train_set = datasets.FIREDataset(train_dir, transforms=train_composed)
     # val_set = datasets.FIREDataset(val_dir, transforms=val_composed)
-    train_set = datasets.UDISDataset(train_dir, transforms=train_composed)
-    val_set = datasets.UDISDataset(val_dir, transforms=val_composed)
+    train_set = datasets.UDISDataset(train_dir, transforms=train_composed, norm=rgb_range == 1)
+    val_set = datasets.UDISDataset(val_dir, transforms=val_composed, norm=rgb_range == 1)
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
     val_loader = DataLoader(val_set, batch_size=16, shuffle=True, num_workers=2, pin_memory=True, drop_last=True)
 
     optimizer = optim.Adam(model.parameters(), lr=updated_lr, weight_decay=0, amsgrad=True)
-    ssim = SSIM(data_range=255, size_average=True, channel=channel)
+    ssim = SSIM(data_range=rgb_range, size_average=True, channel=channel)
 
     best_ncc = 0
     writer = SummaryWriter(log_dir='logs/' + save_dir)
@@ -203,11 +205,11 @@ def main():
         }, save_dir='experiments/' + save_dir, filename='dsc{:.3f}.pth.tar'.format(eval_ncc.avg))
         writer.add_scalar('DSC/validate', eval_ncc.avg, epoch)
         plt.switch_backend('agg')
-        pred_fig = comput_fig(def_out)
-        grid_origin_fig = comput_fig(grid_img)
-        grid_fig = comput_fig(def_grid)
-        x_fig = comput_fig(x_rgb)
-        tar_fig = comput_fig(y_rgb)
+        pred_fig = comput_fig(def_out, rgb_range)
+        grid_origin_fig = comput_fig(grid_img, rgb_range)
+        grid_fig = comput_fig(def_grid, rgb_range)
+        x_fig = comput_fig(x_rgb, rgb_range)
+        tar_fig = comput_fig(y_rgb, rgb_range)
         writer.add_figure('Grid', grid_fig, epoch)
         plt.close(grid_fig)
         writer.add_figure('Grid_origin', grid_origin_fig, 0)
@@ -222,7 +224,7 @@ def main():
     writer.close()
 
 
-def comput_fig(img):
+def comput_fig(img, rgb_range=1):
     img = img.detach().cpu().numpy()[0:16, ...]
     fig = plt.figure(figsize=(12, 12), dpi=180)
     for i in range(img.shape[0]):
@@ -235,7 +237,9 @@ def comput_fig(img):
             # gray
             plt.imshow(img_local, cmap='gray')
         else:
-            img_local = img_local.astype(np.uint8)
+            if rgb_range != 1:
+                # convert 0-255 to long
+                img_local = img_local.astype(np.uint8)
             plt.imshow(img_local)
     fig.subplots_adjust(wspace=0, hspace=0)
     return fig
