@@ -166,8 +166,8 @@ def main():
         writer.add_scalar('Loss/train', loss_all.avg, epoch)
         print('Epoch {} loss {:.4f}'.format(epoch, loss_all.avg))
 
-        # if epoch % 10 != 0:
-        #     continue
+        if epoch % info_gap != 0:
+            continue
         '''
         Validation
         '''
