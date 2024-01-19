@@ -338,8 +338,10 @@ class TransMorphDiffRGB(nn.Module):
     :return: Warped image, Deformation field, Displacement field
     """
 
-    def __init__(self, config, recon_loss_fuc=None):
+    def __init__(self, config, recon_loss_fuc=None, channel=1):
         super(TransMorphDiffRGB, self).__init__()
+        self.channel = channel
+        config.in_chans = config.in_chans * self.channel
         img_sz = config.img_size
         image_sigma = config.image_sigma
         prior_lambda = config.prior_lambda
@@ -398,7 +400,7 @@ class TransMorphDiffRGB(nn.Module):
                                    use_batchnorm=False)
         self.up3 = TM.DecoderBlock(embed_dim, config.reg_head_chan, skip_channels=embed_dim // 2 if if_convskip else 0,
                                    use_batchnorm=False)
-        self.c1 = TM.Conv2dReLU(2, embed_dim // 2, 3, 1, use_batchnorm=False)
+        self.c1 = TM.Conv2dReLU(2 * self.channel, embed_dim // 2, 3, 1, use_batchnorm=False)
 
         self.flow_mean = nn.Conv2d(config.reg_head_chan, 2, kernel_size=3, stride=1, padding=1, bias=True)
         self.flow_sigma = nn.Conv2d(config.reg_head_chan, 2, kernel_size=3, stride=1, padding=1, bias=True)
@@ -440,14 +442,16 @@ class TransMorphDiffRGB(nn.Module):
         source, target = inputs
         self.__do_some_clean()
         affine_map = self.id_transform.clone()
-        # source.shape=torch.Size([196, 1, 256, 256])
-        # target.shape=torch.Size([196, 1, 256, 256])
-        # affine_map.shape=torch.Size([1, 2, 256, 256])
+        # source.shape=torch.Size([196, 1, 256, 256]) -> torch.Size([196, 3, 256, 256])
+        # target.shape=torch.Size([196, 1, 256, 256]) -> torch.Size([196, 3, 256, 256])
+        # affine_map.shape=torch.Size([1, 2, 256, 256]) -> torch.Size([1, 2, 256, 256])
         x = torch.cat((source, target), dim=1)
         # x.shape=torch.Size([196, 2, 256, 256])
         if self.if_convskip:
             x_s1 = self.avg_pool(x)
+            # x_s1.shape=torch.Size([196, 2, 128, 128])
             f4 = self.c1(x_s1)
+            # f4.shape=torch.Size([196, 48, 128, 128])
         else:
             f4 = None
         out = self.transformer(x)

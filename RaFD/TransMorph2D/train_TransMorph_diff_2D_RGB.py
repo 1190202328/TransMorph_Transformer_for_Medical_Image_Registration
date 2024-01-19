@@ -38,6 +38,7 @@ def main():
     train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/training'
     val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/testing'
     model_name = 'TransMorphDiffRGB'
+    channel = 3
 
     # need change
     batch_size = 196
@@ -64,7 +65,7 @@ def main():
     Initialize model
     '''
     config = CONFIGS_TM[model_name]
-    model = TransMorphDiffRGB(config, recon_loss_fuc=recon_loss_fuc)
+    model = TransMorphDiffRGB(config, recon_loss_fuc=recon_loss_fuc, channel=channel)
     model.cuda()
 
     '''
@@ -101,7 +102,7 @@ def main():
     val_loader = DataLoader(val_set, batch_size=16, shuffle=True, num_workers=2, pin_memory=True, drop_last=True)
 
     optimizer = optim.Adam(model.parameters(), lr=updated_lr, weight_decay=0, amsgrad=True)
-    ssim = SSIM(data_range=255, size_average=True, channel=1)
+    ssim = SSIM(data_range=255, size_average=True, channel=channel)
 
     best_ncc = 0
     writer = SummaryWriter(log_dir='logs/' + save_dir)
@@ -120,8 +121,8 @@ def main():
             model.train()
             adjust_learning_rate(optimizer, epoch, max_epoch, lr)
             data = [t.cuda() for t in data]
-            x = data[-2]
-            y = data[-1]
+            x = data[0]
+            y = data[1]
 
             output = model((x, y))
             loss_sim = model.get_sim_loss() * weights[0]
@@ -159,11 +160,12 @@ def main():
                                                                                    loss_sim_iter.item() / 2,
                                                                                    loss_reg_iter.item() / 2))
             del output
+
         writer.add_scalar('Loss/train', loss_all.avg, epoch)
         print('Epoch {} loss {:.4f}'.format(epoch, loss_all.avg))
 
-        if epoch % 10 != 0:
-            continue
+        # if epoch % 10 != 0:
+        #     continue
         '''
         Validation
         '''
@@ -177,24 +179,18 @@ def main():
                 data = [t.cuda() for t in data]
                 x_rgb = data[0]
                 y_rgb = data[1]
-                x = data[2]
-                y = data[3]
 
-                warped_img, flow, _ = model((y, x))
-                ncc = ssim(warped_img, x)
-                eval_ncc.update(ncc.item(), x.numel())
+                warped_img, flow, _ = model((y_rgb, x_rgb))
+                ncc = ssim(warped_img, x_rgb)
+                eval_ncc.update(ncc.item(), x_rgb.numel())
 
                 # flip image
-                warped_img, flow, _ = model((x, y))
-                ncc = ssim(warped_img, y)
-                eval_ncc.update(ncc.item(), x.numel())
-            grid_img = mk_grid_img(8, 1, (x.shape[0], config.img_size[0], config.img_size[1]))
-            def_out = []
-            channel_dim = 1
-            for idx in range(3):
-                x_def = reg_model(x_rgb[:, idx:idx + 1, ...].cuda().float(), flow)
-                def_out.append(x_def)
-            def_out = torch.cat(def_out, dim=channel_dim)
+                warped_img, flow, _ = model((x_rgb, y_rgb))
+                ncc = ssim(warped_img, y_rgb)
+                eval_ncc.update(ncc.item(), x_rgb.numel())
+
+            grid_img = mk_grid_img(8, 1, (x_rgb.shape[0], config.img_size[0], config.img_size[1]))
+            def_out = reg_model(x_rgb.cuda().float(), flow)
             def_grid = reg_model_bilin(grid_img.float(), flow)
             print(flow[0][:, 50:55, 50:55])
         print(f'result = {eval_ncc.avg}')
