@@ -33,13 +33,13 @@ class Logger(object):
 
 
 def main():
-    batch_size = 196
     # train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
     # val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
     train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/training'
     val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/testing'
 
     # need change
+    batch_size = 196
     weights = [1, 1]  # loss weights
 
     recon_loss_fuc = None
