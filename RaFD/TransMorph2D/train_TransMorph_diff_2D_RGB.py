@@ -158,9 +158,11 @@ def main():
             optimizer.step()
             loss_all.update(loss.item(), y.numel())
 
-            print('Iter {} of {} loss {:.4f}, Img Sim: {:.6f}, Reg: {:.6f}'.format(idx, len(train_loader), loss.item(),
-                                                                                   loss_sim_iter.item() / 2,
-                                                                                   loss_reg_iter.item() / 2))
+            if idx % info_gap == 0:
+                print('Iter {} of {} loss {:.4f}, Img Sim: {:.6f}, Reg: {:.6f}'.format(idx, len(train_loader),
+                                                                                       loss.item(),
+                                                                                       loss_sim_iter.item() / 2,
+                                                                                       loss_reg_iter.item() / 2))
             del output
 
         writer.add_scalar('Loss/train', loss_all.avg, epoch)
