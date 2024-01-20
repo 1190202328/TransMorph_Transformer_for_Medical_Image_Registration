@@ -39,8 +39,8 @@ def main():
     use_grad = False
 
     # need change
-    dataset_name = 'FIRE'
-    batch_size = 196
+    dataset_name = 'UDIS'  # FIRE, UDIS
+    batch_size = 24
     weights = [1, 10]  # loss weights
 
     recon_loss_fuc = None
@@ -89,7 +89,7 @@ def main():
     Initialize training
     '''
     train_composed = val_composed = transforms.Compose([
-        transforms.Resize(config.img_size[0]),
+        transforms.Resize(config.img_size),
         transforms.ToTensor()
     ])
 
@@ -112,7 +112,8 @@ def main():
         raise Exception
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
-    val_loader = DataLoader(val_set, batch_size=16, shuffle=True, num_workers=2, pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val_set, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True,
+                            drop_last=True)
 
     optimizer = optim.Adam(model.parameters(), lr=updated_lr, weight_decay=0, amsgrad=True)
     ssim = SSIM(data_range=rgb_range, size_average=True, channel=channel)
@@ -179,8 +180,8 @@ def main():
         writer.add_scalar('Loss/train', loss_all.avg, epoch)
         print('Epoch {} loss {:.4f}'.format(epoch, loss_all.avg))
 
-        if epoch % info_gap != 0:
-            continue
+        # if epoch % info_gap != 0:
+        #     continue
         '''
         Validation
         '''
@@ -238,10 +239,10 @@ def main():
 
 
 def comput_fig(img, rgb_range=1):
-    img = img.detach().cpu().numpy()[0:16, ...]
-    fig = plt.figure(figsize=(12, 12), dpi=180)
+    img = img.detach().cpu().numpy()[0:4, ...]
+    fig = plt.figure(figsize=(12, 6), dpi=180)
     for i in range(img.shape[0]):
-        plt.subplot(4, 4, i + 1)
+        plt.subplot(2, 2, i + 1)
         plt.axis('off')
         img_local = img[i]
 

@@ -54,7 +54,7 @@ def get_TransMorphDiff_rgb_config():
     config.use_checkpoint = False
     config.out_indices = (0, 1, 2, 3)
     config.reg_head_chan = 16
-    config.img_size = (256, 256)
+    config.img_size = (512, 1024)
     config.image_sigma = 0.01
     config.prior_lambda = 40
     config.prior_lambda_mean = 40
