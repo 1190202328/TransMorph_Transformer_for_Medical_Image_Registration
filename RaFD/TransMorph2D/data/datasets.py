@@ -43,9 +43,10 @@ class UDISDataset(Dataset):
 
 
 class FIREDataset(Dataset):
-    def __init__(self, data_dir, transforms):
+    def __init__(self, data_dir, transforms, norm=False):
         self.data_dir = data_dir
         self.transforms = transforms
+        self.norm = norm
         self.init()
 
     def init(self):
@@ -71,7 +72,10 @@ class FIREDataset(Dataset):
         y = self.transforms(y)
         x_grey = self.transforms(x_grey)
         y_grey = self.transforms(y_grey)
-        return x * 255, y * 255, x_grey * 255, y_grey * 255
+        if self.norm:
+            return x, y, x_grey, y_grey
+        else:
+            return x * 255, y * 255, x_grey * 255, y_grey * 255
 
     def __len__(self):
         return len(self.paths)

@@ -33,18 +33,15 @@ class Logger(object):
 
 
 def main():
-    # train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
-    # val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
-    train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/training'
-    val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/testing'
     model_name = 'TransMorphDiffRGB'
     channel = 3  # 1 for grey or 3 for rgb
     rgb_range = 1  # 1 or 255
     use_grad = False
 
     # need change
+    dataset_name = 'FIRE'
     batch_size = 196
-    weights = [1, 1]  # loss weights
+    weights = [1, 10]  # loss weights
 
     recon_loss_fuc = None
     # recon_loss_fuc = losses.SSIM_loss(data_range=255, if_MS=False)
@@ -95,10 +92,24 @@ def main():
         transforms.Resize(config.img_size[0]),
         transforms.ToTensor()
     ])
-    # train_set = datasets.FIREDataset(train_dir, transforms=train_composed)
-    # val_set = datasets.FIREDataset(val_dir, transforms=val_composed)
-    train_set = datasets.UDISDataset(train_dir, transforms=train_composed, norm=rgb_range == 1)
-    val_set = datasets.UDISDataset(val_dir, transforms=val_composed, norm=rgb_range == 1)
+
+    '''
+    Initialize dataset
+    '''
+    if dataset_name == 'FIRE':
+        # FIRE dataset
+        train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
+        val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/FIRE/FIRE/Images'
+        train_set = datasets.FIREDataset(train_dir, transforms=train_composed, norm=rgb_range == 1)
+        val_set = datasets.FIREDataset(val_dir, transforms=val_composed, norm=rgb_range == 1)
+    elif dataset_name == 'UDIS':
+        # UDIS dataset
+        train_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/training'
+        val_dir = '/nfs/ofs-902-1/object-detection/jiangjing/datasets/UDIS/UDIS-D/testing'
+        train_set = datasets.UDISDataset(train_dir, transforms=train_composed, norm=rgb_range == 1)
+        val_set = datasets.UDISDataset(val_dir, transforms=val_composed, norm=rgb_range == 1)
+    else:
+        raise Exception
 
     train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True, num_workers=2, pin_memory=True)
     val_loader = DataLoader(val_set, batch_size=16, shuffle=True, num_workers=2, pin_memory=True, drop_last=True)
