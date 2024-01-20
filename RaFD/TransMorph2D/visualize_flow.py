@@ -26,7 +26,7 @@ class Logger(object):
 def main():
     visualization_save_dir = '/nfs/ofs-902-1/object-detection/jiangjing/experiments/transmorph/visualization'
     root_dir = '/nfs/s3_common_dataset/cityscapes/leftImg8bit/train/'
-    crop_size = 1024
+    input_size = (1024, 512)
     rgb_range = 1
 
     # need change
@@ -42,7 +42,7 @@ def main():
         # 转换到圆柱坐标
         theta = xs * W / (2 * focal_length)
         xs = torch.sin(theta)
-        ys = ys * H / (2 * focal_length)
+        ys = ys * W / (2 * focal_length)
         zs = torch.cos(theta)
 
         # 归一化坐标
@@ -56,7 +56,7 @@ def main():
         return grid.unsqueeze(0)  # 增加一个批处理维度
 
     # 创建圆柱形变换网格
-    cylindrical_grid = create_cylindrical_grid(crop_size, crop_size, crop_size // 3)
+    cylindrical_grid = create_cylindrical_grid(input_size[0], input_size[1], input_size[0] // 3)
     flow = cylindrical_grid.permute(0, 3, 1, 2).cuda()
 
     # change done
@@ -79,7 +79,7 @@ def main():
         source_img_path = f'{root_dir}/{city_name}/{city_name}_{number}_000019_leftImg8bit.png'
         image = Image.open(source_img_path).convert('RGB')
         # resize
-        image = image.resize((crop_size, crop_size), Image.BICUBIC)
+        image = image.resize(input_size, Image.BICUBIC)
         input_transform = transforms.Compose([
             transforms.ToTensor(),
         ])
@@ -87,7 +87,7 @@ def main():
         images.append(image.cuda())
     images = torch.stack(images, dim=0)
 
-    grid_img = mk_grid_img(16, 1, (images.shape[0], crop_size, crop_size))
+    grid_img = mk_grid_img(16, 1, (images.shape[0], input_size[1], input_size[0]))
     def_out = reg_model(images.float(), flow)
     def_grid = reg_model(grid_img.float(), flow)
 
@@ -97,13 +97,6 @@ def main():
     def_out_with_grid[:, 0:1, :, :][mask == 1] = 1  # red
     def_out_with_grid[:, 1:2, :, :][mask == 1] = 0
     def_out_with_grid[:, 2:3, :, :][mask == 1] = 0
-
-    # crop
-    composed_crop = transforms.Compose([
-        transforms.CenterCrop(crop_size // 2)
-    ])
-    def_out = composed_crop(def_out)
-    def_out_with_grid = composed_crop(def_out_with_grid)
 
     # draw
     plt.switch_backend('agg')
@@ -132,7 +125,7 @@ def main():
 def comput_fig(img, rgb_range=1, total_num=16):
     sqart_total_num = int(total_num ** 0.5)
     img = img.detach().cpu().numpy()[0:total_num, ...]
-    fig = plt.figure(figsize=(12, 12), dpi=180)
+    fig = plt.figure(figsize=(12, 6), dpi=180)
     for i in range(img.shape[0]):
         plt.subplot(sqart_total_num, sqart_total_num, i + 1)
         plt.axis('off')
