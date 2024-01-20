@@ -26,7 +26,7 @@ class Logger(object):
 def main():
     visualization_save_dir = '/nfs/ofs-902-1/object-detection/jiangjing/experiments/transmorph/visualization'
     root_dir = '/nfs/s3_common_dataset/cityscapes/leftImg8bit/train/'
-    crop_size = 512
+    crop_size = 1024
     rgb_range = 1
 
     # need change
@@ -56,7 +56,7 @@ def main():
         return grid.unsqueeze(0)  # 增加一个批处理维度
 
     # 创建圆柱形变换网格
-    cylindrical_grid = create_cylindrical_grid(crop_size, crop_size, crop_size)
+    cylindrical_grid = create_cylindrical_grid(crop_size, crop_size, crop_size // 3)
     flow = cylindrical_grid.permute(0, 3, 1, 2).cuda()
 
     # change done
@@ -97,6 +97,13 @@ def main():
     def_out_with_grid[:, 0:1, :, :][mask == 1] = 1  # red
     def_out_with_grid[:, 1:2, :, :][mask == 1] = 0
     def_out_with_grid[:, 2:3, :, :][mask == 1] = 0
+
+    # crop
+    composed_crop = transforms.Compose([
+        transforms.CenterCrop(crop_size // 2)
+    ])
+    def_out = composed_crop(def_out)
+    def_out_with_grid = composed_crop(def_out_with_grid)
 
     # draw
     plt.switch_backend('agg')
