@@ -34,8 +34,31 @@ def main():
     source_img_numbers = ['000000', '000005', '000010', '000015']
     total_num = len(source_img_numbers)
 
-    flow = torch.randn([2, crop_size, crop_size]).cuda()
-    
+    def create_cylindrical_grid(H, W, focal_length):
+        # 生成像素坐标网格
+        ys, xs = torch.meshgrid(torch.linspace(-1, 1, H), torch.linspace(-1, 1, W))
+        ys, xs = ys.to(torch.float32), xs.to(torch.float32)
+
+        # 转换到圆柱坐标
+        theta = xs * W / (2 * focal_length)
+        xs = torch.sin(theta)
+        ys = ys * H / (2 * focal_length)
+        zs = torch.cos(theta)
+
+        # 归一化坐标
+        cylindrical_coords = torch.stack([xs, ys, zs], -1)
+        cylindrical_coords = cylindrical_coords / cylindrical_coords.norm(dim=-1, keepdim=True)
+
+        # 转换回图像坐标系
+        grid = cylindrical_coords[..., :2] / cylindrical_coords[..., 2:]
+        grid = grid.permute(1, 0, 2)  # 调整维度以符合grid_sample的要求
+
+        return grid.unsqueeze(0)  # 增加一个批处理维度
+
+    # 创建圆柱形变换网格
+    cylindrical_grid = create_cylindrical_grid(crop_size, crop_size, crop_size)
+    flow = cylindrical_grid.permute(0, 3, 1, 2).cuda()
+
     # change done
     flow = flow.repeat(total_num, 1, 1, 1)
     '''
@@ -64,15 +87,31 @@ def main():
         images.append(image.cuda())
     images = torch.stack(images, dim=0)
 
-    grid_img = mk_grid_img(8, 1, (images.shape[0], crop_size, crop_size))
+    grid_img = mk_grid_img(16, 1, (images.shape[0], crop_size, crop_size))
     def_out = reg_model(images.float(), flow)
-    def_grid = reg_model_bilin(grid_img.float(), flow)
+    def_grid = reg_model(grid_img.float(), flow)
+
+    # get fusion target image
+    mask = def_grid
+    def_out_with_grid = def_out.clone()
+    def_out_with_grid[:, 0:1, :, :][mask == 1] = 1  # red
+    def_out_with_grid[:, 1:2, :, :][mask == 1] = 0
+    def_out_with_grid[:, 2:3, :, :][mask == 1] = 0
 
     # draw
     plt.switch_backend('agg')
+
+    x_fig = comput_fig(images, rgb_range, total_num)
+    plt.savefig(f'{visualization_save_dir}/image_origin.png')
+    plt.close(x_fig)
+
     pred_fig = comput_fig(def_out, rgb_range, total_num)
     plt.savefig(f'{visualization_save_dir}/image_warped.png')
     plt.close(pred_fig)
+
+    pred_fig_with_grid = comput_fig(def_out_with_grid, rgb_range, total_num)
+    plt.savefig(f'{visualization_save_dir}/image_warped_with_grid.png')
+    plt.close(pred_fig_with_grid)
 
     grid_origin_fig = comput_fig(grid_img, rgb_range, total_num)
     plt.savefig(f'{visualization_save_dir}/grid_origin_fig.png')
@@ -81,10 +120,6 @@ def main():
     grid_fig = comput_fig(def_grid, rgb_range, total_num)
     plt.savefig(f'{visualization_save_dir}/grid_fig.png')
     plt.close(grid_fig)
-
-    x_fig = comput_fig(images, rgb_range, total_num)
-    plt.savefig(f'{visualization_save_dir}/image_origin.png')
-    plt.close(x_fig)
 
 
 def comput_fig(img, rgb_range=1, total_num=16):
