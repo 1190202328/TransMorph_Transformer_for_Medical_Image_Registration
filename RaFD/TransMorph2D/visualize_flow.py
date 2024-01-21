@@ -88,6 +88,13 @@ def main():
     images = torch.stack(images, dim=0)
 
     grid_img = mk_grid_img(16, 1, (images.shape[0], input_size[1], input_size[0]))
+
+    # # sampling
+    # images = torch.nn.UpsamplingBilinear2d(size=(input_size[1]//2, input_size[0]//2))(images)
+    # flow = torch.nn.UpsamplingBilinear2d(size=(input_size[1] // 2, input_size[0] // 2))(flow)
+    #
+    # grid_img = torch.nn.UpsamplingNearest2d(size=(input_size[1] // 2, input_size[0] // 2))(grid_img)
+
     def_out = reg_model(images.float(), flow)
     def_grid = reg_model(grid_img.float(), flow)
 
