@@ -55,15 +55,14 @@ def main():
 
         return grid.unsqueeze(0)  # 增加一个批处理维度
 
-    def create_dual_cylindrical_grid(shape, scale=1.0):
-        N, C, H, W = shape  # 获取图像尺寸
+    def create_dual_cylindrical_grid(H, W, scale=1.0):
         # 生成标准化坐标网格
-        xx = torch.linspace(-1, 1, W)
-        yy = torch.linspace(-1, 1, H)
+        xx = torch.linspace(-1, 1, H)
+        yy = torch.linspace(-1, 1, W)
         grid_y, grid_x = torch.meshgrid(yy, xx)
 
         # 水平方向上的双柱面坐标
-        half_width = W // 2
+        half_width = H // 2
         theta_x_left = torch.atan(grid_x[:, :half_width]) * 2
         theta_x_right = torch.atan(grid_x[:, half_width:]) * 2
         x_cyl_left = torch.sin(theta_x_left * scale)
@@ -75,14 +74,14 @@ def main():
 
         # 创建网格
         grid = torch.stack((y_cyl, x_cyl), 2)
-        grid = grid.unsqueeze(0).repeat(N, 1, 1, 1)
+        grid = grid.unsqueeze(0)
         return grid
 
     # 创建单圆柱形变换网格
     # grid = create_cylindrical_grid(input_size[0], input_size[1], input_size[0] // 3)
 
     # 创建双圆柱形变换网格
-    grid = create_dual_cylindrical_grid([1, 3, input_size[1], input_size[0]], scale=0.8)
+    grid = create_dual_cylindrical_grid(input_size[0], input_size[1], scale=0.8)
 
     flow = grid.permute(0, 3, 1, 2).cuda()
 
