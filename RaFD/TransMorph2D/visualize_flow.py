@@ -77,11 +77,25 @@ def main():
         grid = grid.unsqueeze(0)
         return grid
 
+    def create_identity_grid(H, W):
+        # 生成标准化坐标网格
+        xx = torch.linspace(-1, 1, H)
+        yy = torch.linspace(-1, 1, W)
+        grid_y, grid_x = torch.meshgrid(yy, xx)
+        grid = torch.stack((grid_y, grid_x), -1)
+        grid = grid.unsqueeze(0)
+
+        return grid
+
+
     # 创建单圆柱形变换网格
     # grid = create_cylindrical_grid(input_size[0], input_size[1], input_size[0] // 3)
 
-    # 创建双圆柱形变换网格
-    grid = create_dual_cylindrical_grid(input_size[0], input_size[1], scale=0.8)
+    # # 创建双圆柱形变换网格
+    # grid = create_dual_cylindrical_grid(input_size[0], input_size[1], scale=0.8)
+
+    # 创建identity变换网格
+    grid = create_identity_grid(input_size[0], input_size[1])
 
     flow = grid.permute(0, 3, 1, 2).cuda()
 
