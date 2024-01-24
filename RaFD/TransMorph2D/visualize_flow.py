@@ -87,15 +87,17 @@ def main():
 
         return grid
 
-
     # 创建单圆柱形变换网格
     # grid = create_cylindrical_grid(input_size[0], input_size[1], input_size[0] // 3)
 
     # # 创建双圆柱形变换网格
     # grid = create_dual_cylindrical_grid(input_size[0], input_size[1], scale=0.8)
 
-    # 创建identity变换网格
-    grid = create_identity_grid(input_size[0], input_size[1])
+    # # 创建identity变换网格
+    # grid = create_identity_grid(input_size[0], input_size[1])
+
+    # 创建双圆柱形变网络并且找到反向变换
+    grid = create_dual_cylindrical_grid(input_size[0], input_size[1], scale=0.8)
 
     flow = grid.permute(0, 3, 1, 2).cuda()
 
@@ -129,6 +131,16 @@ def main():
     images = torch.stack(images, dim=0)
     print(images.shape)
 
+    # get inverse flow
+    deform_field = flow
+    norm_coord = create_identity_grid(input_size[0], input_size[1])
+    norm_coord = norm_coord.permute(0, 3, 1, 2).cuda().repeat(total_num, 1, 1, 1)
+
+    disp_field = deform_field - norm_coord
+    inv_disp_field = - reg_model(disp_field, deform_field)
+    inverse_flow = inv_disp_field + norm_coord
+    # get done
+
     grid_img = mk_grid_img(16, 1, (images.shape[0], input_size[1], input_size[0]))
 
     # # sampling
@@ -140,12 +152,22 @@ def main():
     def_out = reg_model(images.float(), flow)
     def_grid = reg_model(grid_img.float(), flow)
 
+    # inverse
+    inverse_def_out = reg_model(def_out.float(), inverse_flow)
+    inverse_def_grid = reg_model(grid_img.float(), inverse_flow)
+
     # get fusion target image
     mask = def_grid
     def_out_with_grid = def_out.clone()
     def_out_with_grid[:, 0:1, :, :][mask == 1] = 1  # red
     def_out_with_grid[:, 1:2, :, :][mask == 1] = 0
     def_out_with_grid[:, 2:3, :, :][mask == 1] = 0
+
+    mask = inverse_def_grid
+    inverse_def_out_with_grid = inverse_def_out.clone()
+    inverse_def_out_with_grid[:, 0:1, :, :][mask == 1] = 1  # red
+    inverse_def_out_with_grid[:, 1:2, :, :][mask == 1] = 0
+    inverse_def_out_with_grid[:, 2:3, :, :][mask == 1] = 0
 
     # draw
     plt.switch_backend('agg')
@@ -162,6 +184,14 @@ def main():
     plt.savefig(f'{visualization_save_dir}/image_warped_with_grid.png')
     plt.close(pred_fig_with_grid)
 
+    inverse_pred_fig = comput_fig(inverse_def_out, rgb_range, total_num)
+    plt.savefig(f'{visualization_save_dir}/inverse_image_warped.png')
+    plt.close(inverse_pred_fig)
+
+    inverse_pred_fig_with_grid = comput_fig(inverse_def_out_with_grid, rgb_range, total_num)
+    plt.savefig(f'{visualization_save_dir}/inverse_image_warped_with_grid.png')
+    plt.close(inverse_pred_fig_with_grid)
+
     grid_origin_fig = comput_fig(grid_img, rgb_range, total_num)
     plt.savefig(f'{visualization_save_dir}/grid_origin_fig.png')
     plt.close(grid_origin_fig)
@@ -169,6 +199,10 @@ def main():
     grid_fig = comput_fig(def_grid, rgb_range, total_num)
     plt.savefig(f'{visualization_save_dir}/grid_fig.png')
     plt.close(grid_fig)
+
+    inverse_grid_fig = comput_fig(inverse_def_grid, rgb_range, total_num)
+    plt.savefig(f'{visualization_save_dir}/inverse_grid_fig.png')
+    plt.close(inverse_grid_fig)
 
 
 def comput_fig(img, rgb_range=1, total_num=16):
