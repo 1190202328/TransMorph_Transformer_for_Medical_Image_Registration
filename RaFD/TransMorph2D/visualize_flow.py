@@ -4,10 +4,12 @@ import sys
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import torch.nn.functional as F
 from PIL import Image
 from torchvision import transforms
 
-from models.TransMorph_diff_rgb import Bilinear
+from models.TransMorph_diff_rgb import Bilinear, TransMorphDiffRGB
+from models.TransMorph_diff_rgb import CONFIGS as CONFIGS_TM
 
 
 class Logger(object):
@@ -32,7 +34,14 @@ def main():
     # need change
     city_name = 'aachen'
     source_img_numbers = ['000000', '000005', '000010', '000015']
+    # change done
     total_num = len(source_img_numbers)
+    '''
+    Initialize model
+    '''
+    config = CONFIGS_TM['TransMorphDiffRGB']
+    model = TransMorphDiffRGB(config, channel=3)
+    model.cuda()
 
     def create_cylindrical_grid(H, W, focal_length):
         # 生成像素坐标网格
@@ -131,10 +140,24 @@ def main():
     images = torch.stack(images, dim=0)
     print(images.shape)
 
+    # 准备计算梯度
+    # 定义Sobel滤波器的水平和垂直方向的卷积核
+    G_x = torch.tensor([[-1., 0., 1.], [-2., 0., 2.], [-1., 0., 1.]]).view(1, 1, 3, 3)
+    G_y = torch.tensor([[-1., -2., -1.], [0., 0., 0.], [1., 2., 1.]]).view(1, 1, 3, 3)
+    # 扩展滤波器的维度以匹配图片向量的通道数，这里是3
+    G_x = G_x.repeat(3, 1, 1, 1).cuda()
+    G_y = G_y.repeat(3, 1, 1, 1).cuda()
+    # 选择使用padding来保持图片的尺寸不变
+    padding = 1
+
+    # 计算梯度
+    # 对每个颜色通道应用卷积，计算水平和垂直梯度
+    grad_x = F.conv2d(images, G_x, padding=padding, groups=3)
+    grad_y = F.conv2d(images, G_y, padding=padding, groups=3)
+
     # get inverse flow
     deform_field = flow
-    norm_coord = create_identity_grid(input_size[0], input_size[1])
-    norm_coord = norm_coord.permute(0, 3, 1, 2).cuda().repeat(total_num, 1, 1, 1)
+    norm_coord = model.id_transform.clone()
 
     disp_field = deform_field - norm_coord
     inv_disp_field = - reg_model(disp_field, deform_field)
@@ -175,6 +198,14 @@ def main():
     x_fig = comput_fig(images, rgb_range, total_num)
     plt.savefig(f'{visualization_save_dir}/image_origin.png')
     plt.close(x_fig)
+
+    grad_x_fig = comput_fig(grad_x, rgb_range, total_num)
+    plt.savefig(f'{visualization_save_dir}/grad_x_fig.png')
+    plt.close(grad_x)
+
+    grad_y_fig = comput_fig(grad_y, rgb_range, total_num)
+    plt.savefig(f'{visualization_save_dir}/grad_y_fig.png')
+    plt.close(grad_y_fig)
 
     pred_fig = comput_fig(def_out, rgb_range, total_num)
     plt.savefig(f'{visualization_save_dir}/image_warped.png')
