@@ -113,6 +113,29 @@ def main():
     # change done
     flow = flow.repeat(total_num, 1, 1, 1)
     print(flow.shape)
+
+    # [B, 2, H, W]
+
+    # 正则
+    def flip(x, dim):
+        indices = [slice(None)] * x.dim()
+        indices[dim] = torch.arange(x.size(dim) - 1, -1, -1,
+                                    dtype=torch.long, device=x.device)
+        return x[tuple(indices)]
+
+    L1_Loss = torch.nn.L1Loss()
+    _, _, H, W = flow.shape
+    flow_left_y = flow[:, :1, :, :W // 2]
+    flow_left_x = flow[:, 1:, :, :W // 2]
+    flow_right_y = flow[:, :1, :, W // 2:]
+    flow_right_x = flow[:, 1:, :, W // 2:]
+    print(L1_Loss(flow_left_y, flow_right_y))
+    flow_right_x = flip(flow_right_x, 3)
+    print(L1_Loss(flow_left_x, -flow_right_x))
+    print(flow_left_x[(flow_left_x != -flow_right_x)].shape)
+    print(flow_right_x[(flow_left_x != -flow_right_x)])
+    raise Exception
+
     '''
     Initialize spatial transformation function
     '''
