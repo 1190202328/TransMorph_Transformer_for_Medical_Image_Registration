@@ -96,46 +96,25 @@ def main():
 
         return grid
 
+    # # 待完成局部的
+    # y, x, h, w = 100, 100, 300, 300
+    # grid = create_cylindrical_grid_new(input_size[0], input_size[1], input_size[0] // 3, y, x, h, w)
+
     # 创建单圆柱形变换网格
     # grid = create_cylindrical_grid(input_size[0], input_size[1], input_size[0] // 3)
 
-    # # 创建双圆柱形变换网格
-    # grid = create_dual_cylindrical_grid(input_size[0], input_size[1], scale=0.8)
+    # 创建双圆柱形变换网格
+    grid = create_dual_cylindrical_grid(input_size[0], input_size[1], scale=0.8)
 
     # # 创建identity变换网格
     # grid = create_identity_grid(input_size[0], input_size[1])
-
-    # 创建双圆柱形变网络并且找到反向变换
-    grid = create_dual_cylindrical_grid(input_size[0], input_size[1], scale=0.8)
 
     flow = grid.permute(0, 3, 1, 2).cuda()
 
     # change done
     flow = flow.repeat(total_num, 1, 1, 1)
     print(flow.shape)
-
     # [B, 2, H, W]
-
-    # 正则
-    def flip(x, dim):
-        indices = [slice(None)] * x.dim()
-        indices[dim] = torch.arange(x.size(dim) - 1, -1, -1,
-                                    dtype=torch.long, device=x.device)
-        return x[tuple(indices)]
-
-    L1_Loss = torch.nn.L1Loss()
-    _, _, H, W = flow.shape
-    flow_left_y = flow[:, :1, :, :W // 2]
-    flow_left_x = flow[:, 1:, :, :W // 2]
-    flow_right_y = flow[:, :1, :, W // 2:]
-    flow_right_x = flow[:, 1:, :, W // 2:]
-    print(L1_Loss(flow_left_y, flow_right_y))
-    flow_right_x = flip(flow_right_x, 3)
-    print(L1_Loss(flow_left_x, -flow_right_x))
-    print(flow_left_x[(flow_left_x != -flow_right_x)].shape)
-    print(flow_right_x[(flow_left_x != -flow_right_x)])
-    raise Exception
-
     '''
     Initialize spatial transformation function
     '''
@@ -183,8 +162,9 @@ def main():
     norm_coord = model.id_transform.clone()
 
     disp_field = deform_field - norm_coord
-    inv_disp_field = - reg_model(disp_field, deform_field)
-    inverse_flow = inv_disp_field + norm_coord
+    # inv_disp_field = - reg_model(disp_field, deform_field)
+    # inverse_flow = inv_disp_field + norm_coord
+    inverse_flow = -disp_field + norm_coord
     # get done
 
     grid_img = mk_grid_img(16, 1, (images.shape[0], input_size[1], input_size[0]))
