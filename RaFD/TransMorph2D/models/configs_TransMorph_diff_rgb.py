@@ -1,4 +1,5 @@
 import ml_collections
+
 '''
 ********************************************************
                    Swing Transformer
@@ -30,6 +31,8 @@ image_sigma (float): Weight for MSE in the loss
 prior_lambda (float): Weight for sigma terms in the loss
 prior_lambda_mean (float): Weight for precision terms in the loss
 '''
+
+
 def get_TransMorphDiff_rgb_config():
     '''
     Trainable params: 15,201,579
@@ -42,7 +45,7 @@ def get_TransMorphDiff_rgb_config():
     config.embed_dim = 96
     config.depths = (2, 2, 4, 2)
     config.num_heads = (4, 4, 8, 8)
-    config.window_size = (8, 8)
+    config.window_size = (6, 6)
     config.mlp_ratio = 4
     config.pat_merg_rf = 4
     config.qkv_bias = False
@@ -54,7 +57,7 @@ def get_TransMorphDiff_rgb_config():
     config.use_checkpoint = False
     config.out_indices = (0, 1, 2, 3)
     config.reg_head_chan = 16
-    config.img_size = (512, 1024)
+    config.img_size = (384, 768)
     config.image_sigma = 0.01
     config.prior_lambda = 40
     config.prior_lambda_mean = 40

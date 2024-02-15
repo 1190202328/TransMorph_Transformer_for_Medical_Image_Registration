@@ -485,6 +485,10 @@ class TransMorphDiffRGB(nn.Module):
             flow = flow_mean + torch.exp(log_sigma / 2.0) * noise
         else:
             flow = flow_mean
+
+        # get inverse
+        inverse_flow = -flow
+
         for _ in range(self.int_steps):
             deform_field = flow + self.low_res_id_transform
             flow_1 = self.bilinear(flow, deform_field)
@@ -499,7 +503,17 @@ class TransMorphDiffRGB(nn.Module):
         self.target = target
         self.source = source
 
-        return warped_source, deform_field, disp_field
+        for _ in range(self.int_steps):
+            inverse_deform_field = inverse_flow + self.low_res_id_transform
+            inverse_flow_1 = self.bilinear(inverse_flow, inverse_deform_field)
+            inverse_flow = inverse_flow_1 + inverse_flow
+        inverse_disp_field = F.interpolate(inverse_flow, scale_factor=2, mode='bilinear')
+        inverse_disp_field = self.scale_map(inverse_disp_field, np.array([1, 1]))
+        inverse_deform_field = inverse_disp_field + affine_map
+        warped_target = self.bilinear_img(target, inverse_deform_field)
+        self.inverse_res_flow_mean = inverse_flow
+
+        return warped_source, deform_field, warped_target, inverse_deform_field
 
     def check_if_update_lr(self):
         return False, None
@@ -590,6 +604,7 @@ class TransMorphDiffRGB(nn.Module):
         # prepare inputs
         ndims = 3
         flow_mean = self.res_flow_mean
+        inverse_flow_mean = self.inverse_res_flow_mean
         log_sigma = self.res_log_sigma
 
         # compute the degree matrix (only needs to be done once)
@@ -601,7 +616,8 @@ class TransMorphDiffRGB(nn.Module):
         sigma_term = torch.mean(sigma_term)  ##!!!!!!!!
 
         # precision terms
-        prec_term = self.prior_lambda_mean * self.prec_loss(flow_mean)  # this is the jacobi loss
+        prec_term = self.prior_lambda_mean * (
+                self.prec_loss(flow_mean) + self.prec_loss(inverse_flow_mean))  # this is the jacobi loss
 
         # combine terms
         return 0.5 * ndims * (sigma_term + prec_term)  # ndims because we averaged over dimensions as well

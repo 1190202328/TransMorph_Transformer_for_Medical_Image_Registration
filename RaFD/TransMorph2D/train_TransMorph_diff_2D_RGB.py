@@ -40,13 +40,14 @@ def main():
 
     # need change
     dataset_name = 'UDIS'  # FIRE, UDIS
-    batch_size = 24
+    batch_size = 40
     weights = [1, 10]  # loss weights
 
     recon_loss_fuc = None
     # recon_loss_fuc = losses.SSIM_loss(data_range=255, if_MS=False)
     # recon_loss_fuc = losses.NCC_vxm()
     # recon_loss_fuc = losses.MSE_loss_2D()
+    L1_loss = torch.nn.L1Loss()
 
     # change done
 
@@ -131,6 +132,7 @@ def main():
         for data in train_loader:
             loss_sim_iter = 0
             loss_reg_iter = 0
+            loss_recon_iter = 0
             idx += 1
             model.train()
             adjust_learning_rate(optimizer, epoch, max_epoch, lr)
@@ -143,7 +145,14 @@ def main():
             loss_sim_iter += loss_sim
             loss_reg = model.scale_reg_loss() * weights[1]
             loss_reg_iter += loss_reg
-            loss = loss_sim + loss_reg
+
+            x_recon = reg_model_bilin(output[0].float(), output[3])
+            y_recon = reg_model_bilin(output[2].float(), output[1])
+            loss_recon = L1_loss(x, x_recon) + L1_loss(y, y_recon)
+            loss_recon = loss_recon * 1
+            loss_recon_iter += loss_recon
+
+            loss = loss_sim + loss_reg + loss_recon
 
             # compute gradient and do SGD step
             optimizer.zero_grad()
@@ -163,7 +172,14 @@ def main():
             loss_sim_iter += loss_sim
             loss_reg = model.scale_reg_loss() * weights[1]
             loss_reg_iter += loss_reg
-            loss = loss_sim + loss_reg
+
+            y_recon = reg_model_bilin(output[0].float(), output[3])
+            x_recon = reg_model_bilin(output[2].float(), output[1])
+            loss_recon = L1_loss(x, x_recon) + L1_loss(y, y_recon)
+            loss_recon = loss_recon * 1
+            loss_recon_iter += loss_recon
+
+            loss = loss_sim + loss_reg + loss_recon
             # compute gradient and do SGD step
             optimizer.zero_grad()
             loss.backward()
@@ -171,10 +187,12 @@ def main():
             loss_all.update(loss.item(), y.numel())
 
             if idx % info_gap == 0:
-                print('Iter {} of {} loss {:.4f}, Img Sim: {:.6f}, Reg: {:.6f}'.format(idx, len(train_loader),
-                                                                                       loss.item(),
-                                                                                       loss_sim_iter.item() / 2,
-                                                                                       loss_reg_iter.item() / 2))
+                print('Iter {} of {} loss {:.4f}, Img Sim: {:.6f}, Reg: {:.6f}, Recon: {:.6f}'.format(idx,
+                                                                                                      len(train_loader),
+                                                                                                      loss.item(),
+                                                                                                      loss_sim_iter.item() / 2,
+                                                                                                      loss_reg_iter.item() / 2,
+                                                                                                      loss_recon_iter.item() / 2))
             del output
 
         writer.add_scalar('Loss/train', loss_all.avg, epoch)
@@ -196,18 +214,21 @@ def main():
                 x_rgb = data[0]
                 y_rgb = data[1]
 
-                warped_img, flow, _ = model((y_rgb, x_rgb))
+                warped_img, flow, inverse_warped_img, inverse_flow = model((y_rgb, x_rgb))
                 ncc = ssim(warped_img, x_rgb)
                 eval_ncc.update(ncc.item(), x_rgb.numel())
 
                 # flip image
-                warped_img, flow, _ = model((x_rgb, y_rgb))
+                warped_img, flow, inverse_warped_img, inverse_flow = model((x_rgb, y_rgb))
                 ncc = ssim(warped_img, y_rgb)
                 eval_ncc.update(ncc.item(), x_rgb.numel())
 
-            grid_img = mk_grid_img(8, 1, (x_rgb.shape[0], config.img_size[0], config.img_size[1]))
+            grid_img = mk_grid_img(32, 2, (x_rgb.shape[0], config.img_size[0], config.img_size[1]))
             def_out = reg_model(x_rgb.cuda().float(), flow)
             def_grid = reg_model_bilin(grid_img.float(), flow)
+
+            inverse_def_out = reg_model(y_rgb.cuda().float(), inverse_flow)
+            inverse_def_grid = reg_model_bilin(grid_img.float(), inverse_flow)
             print(flow[0][:, 50:55, 50:55])
         print(f'result = {eval_ncc.avg}')
         best_ncc = max(eval_ncc.avg, best_ncc)
@@ -220,12 +241,16 @@ def main():
         writer.add_scalar('DSC/validate', eval_ncc.avg, epoch)
         plt.switch_backend('agg')
         pred_fig = comput_fig(def_out, rgb_range)
+        inverse_pred_fig = comput_fig(inverse_def_out, rgb_range)
         grid_origin_fig = comput_fig(grid_img, rgb_range)
         grid_fig = comput_fig(def_grid, rgb_range)
+        inverse_grid_fig = comput_fig(inverse_def_grid, rgb_range)
         x_fig = comput_fig(x_rgb, rgb_range)
         tar_fig = comput_fig(y_rgb, rgb_range)
         writer.add_figure('Grid', grid_fig, epoch)
         plt.close(grid_fig)
+        writer.add_figure('inverse_Grid', inverse_grid_fig, epoch)
+        plt.close(inverse_grid_fig)
         writer.add_figure('Grid_origin', grid_origin_fig, 0)
         plt.close(grid_origin_fig)
         writer.add_figure('input', x_fig, epoch)
@@ -234,6 +259,8 @@ def main():
         plt.close(tar_fig)
         writer.add_figure('prediction', pred_fig, epoch)
         plt.close(pred_fig)
+        writer.add_figure('inverse_prediction', inverse_pred_fig, epoch)
+        plt.close(inverse_pred_fig)
         loss_all.reset()
     writer.close()
 
